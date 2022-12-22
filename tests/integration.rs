@@ -103,7 +103,7 @@ fn test_merging_uniform() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //find minima
   let mins = &watershed.find_local_minima(rf.view());
@@ -131,7 +131,7 @@ fn test_segmenting_uniform() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //find minima
   let mins = &watershed.find_local_minima(rf.view());
@@ -159,7 +159,7 @@ fn test_merging_poisson() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let rf = watershed.pre_processor(rf.view());
@@ -188,7 +188,7 @@ fn test_segmenting_poisson() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let rf = watershed.pre_processor(rf.view());
@@ -228,7 +228,7 @@ fn test_merging_real() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
@@ -269,7 +269,7 @@ fn test_segmenting_real() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
@@ -309,7 +309,7 @@ fn test_merging_real_with_nan() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
@@ -349,7 +349,7 @@ fn test_segmenting_real_with_nan() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
@@ -375,7 +375,7 @@ fn test_merging_gaussian() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(
@@ -413,7 +413,7 @@ fn test_segmenting_gaussian() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(
@@ -465,7 +465,7 @@ fn test_merging_real_smoothed() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_merging().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
@@ -505,7 +505,7 @@ fn test_segmenting_real_smoothed() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting().set_plot_folder(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
