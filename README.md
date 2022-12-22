@@ -37,7 +37,7 @@ To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the foll
 ```rust
 :dep rustronomy-watershed = {version = "0.1"}
 ```
-If you want to use the latest (unstable) development version of rustronomy-fits, you can do so by using the `git` field (which fetches the latest version from the repo) rather than the `version` field (which downloads the latest released version from crates.io). 
+If you want to use the latest (unstable) development version of `rustronomy-watershed`, you can do so by using the `git` field (which fetches the latest version from the repo) rather than the `version` field (which downloads the latest released version from crates.io). 
 ```
 {git = "https://github.com/smups/rustronomy-watershed"}
 ```
