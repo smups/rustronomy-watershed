@@ -23,6 +23,7 @@ below](#cargo-feature-gates).
 # Gallery
 *Merging watershed algorithm in action*
 ![](./gallery/CGPS_merge.gif)
+
 *Segmenting watershed algorithm in action*
 ![](./gallery/CGPS_segment.gif)
 
@@ -98,5 +99,4 @@ See the [LICENSE.md](../LICENSE.md) file for the EUPL text in all 22 official
 languages of the EU, and [LICENSE-EN.txt](../LICENSE-EN.txt) for a plain text
 English version of the license.
 
-# References
 [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
