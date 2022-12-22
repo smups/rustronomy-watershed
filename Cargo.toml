@@ -22,9 +22,14 @@ name = "rustronomy-watershed"
 version = "0.1.0"
 edition = "2021"
 readme = "./README.md"
-license = "EUPLv1.6"
+license = "EUPLv1.2"
+repository = "https://github.com/smups/rustronomy-watershed/"
+homepage = "https://github.com/smups/rustronomy-watershed/"
+exclude = [
+  "gallery/*"
+]
 authors = ["Raúl Wolters <rawolters11@gmail.com>"]
-description = "core dependency for rustronomy crates providing interoperable types"
+description = "a pure-rust implementation of the segmenting and merging watershed algorithms"
 keywords = ["astronomy", "astrophysics", "rustronomy", "image processing", "watershed"]
 categories = ["science", "algorithms"]
 
