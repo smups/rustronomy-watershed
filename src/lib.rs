@@ -19,6 +19,38 @@
   licensee subject to Dutch law as per article 15 of the EUPL.
 */
 
+#![doc(
+  html_logo_url = "https://raw.githubusercontent.com/smups/rustronomy/main/logos/Rustronomy_ferris.png?raw=true"
+)]
+//!
+//! 
+//! 
+//! 
+//! # Cargo feature gates
+//! *By default, all features behind cargo feature gates are **disabled***
+//! - `jemalloc`: this feature enables the [jemalloc allocator](https://jemalloc.net).
+//! From the jemalloc website: *"jemalloc is a general purpose `malloc`(3)
+//! implementation that emphasizes fragmentation avoidance and scalable concurrency
+//! support."*. Jemalloc is enabled though usage of the `jemalloc` crate, which
+//! increases compile times considerably. However, enabling this feature can also
+//! greatly improve run-time performance, especially on machines with more (>6 or so)
+//! cores. To compile `rustronomy-watershed` with the `jemalloc` feature,
+//! jemalloc must be installed on the host system.
+//! - `plots`: with this feature enabled, `rustronomy-watershed` will generate a
+//! plot of the watershed-transform each time the water level is increased.
+//! Plotting support adds the `plotters` crate as a dependency, which increases
+//! compile times and requires the installation of some packages on linux
+//! systems, [see the `plotters` documentation for details](https://docs.rs/plotters/).
+//! - `progress`: this feature enables progress bars for the watershed algorithm.
+//! Enabling this feature adds the `indicatif` crate as a dependency,
+//! which should not considerably slow down compile times.
+//! - `debug`: this feature enables debug and performance monitoring output. This
+//! can negatively impact performance. Enabling this feature does not add additional
+//! dependencies.
+//! 
+//! ## `plots` feature gate
+//! Enabling the `plots` feature gate breaks 
+
 //Unconditional imports
 use ndarray as nd;
 use num_traits::{Num, ToPrimitive};
@@ -480,7 +512,7 @@ pub struct TransformBuilder {
 
   //Basic transform options
   segmenting: bool,
-  max_water_level: u8
+  max_water_level: u8,
 }
 
 impl TransformBuilder {
@@ -495,22 +527,22 @@ impl TransformBuilder {
   }
 
   #[cfg(feature = "plots")]
-  pub fn new_segmenting(plot_output_folder: &std::path::Path) -> Self {
+  pub fn new_segmenting() -> Self {
     TransformBuilder {
-      plot_path: Some(plot_output_folder.to_path_buf()),
+      plot_path: None,
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: true,
-      max_water_level: NORMAL_MAX
+      max_water_level: NORMAL_MAX,
     }
   }
 
   #[cfg(feature = "plots")]
-  pub fn new_merging(plot_output_folder: &std::path::Path) -> Self {
+  pub fn new_merging() -> Self {
     TransformBuilder {
-      plot_path: Some(plot_output_folder.to_path_buf()),
+      plot_path: None,
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: false,
-      max_water_level: NORMAL_MAX
+      max_water_level: NORMAL_MAX,
     }
   }
 
@@ -542,18 +574,21 @@ impl TransformBuilder {
   pub fn build(self) -> Result<Box<dyn Watershed>, String> {
     //Check if the max water level is not higher than than NORMAL MAX
     if self.max_water_level > NORMAL_MAX {
-      Err(format!("Max water level was set at {}, which is higher than the allowed maximum ({NORMAL_MAX}).", self.max_water_level))?
+      Err(format!(
+        "Max water level was set at {}, which is higher than the allowed maximum ({NORMAL_MAX}).",
+        self.max_water_level
+      ))?
     }
 
     if self.segmenting {
       Ok(Box::new(SegmentingWatershed {
-        plot_path: self.plot_path.ok_or("Cannot configure watershed transform to plot without specifying an output path for the plots. Please disable the `plots` feature or specify an output path.")?,
+        plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
         max_water_level: self.max_water_level
       }))
     } else {
       Ok(Box::new(MergingWatershed {
-        plot_path: self.plot_path.ok_or("Cannot configure watershed transform to plot without specifying an output path for the plots. Please disable the `plots` feature or specify an output path.")?,
+        plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
         max_water_level: self.max_water_level
       }))
@@ -563,9 +598,9 @@ impl TransformBuilder {
   #[cfg(not(feature = "plots"))]
   pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     if self.segmenting {
-      Ok(Box::new(SegmentingWatershed {max_water_level: self.max_water_level}))
+      Ok(Box::new(SegmentingWatershed { max_water_level: self.max_water_level }))
     } else {
-      Ok(Box::new(MergingWatershed {max_water_level: self.max_water_level}))
+      Ok(Box::new(MergingWatershed { max_water_level: self.max_water_level }))
     }
   }
 }
@@ -628,11 +663,8 @@ pub trait WatershedUtils {
 }
 
 pub trait Watershed {
-  fn transform(
-    &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)]
-  ) -> Vec<(u8, Vec<usize>)>;
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)])
+    -> Vec<(u8, Vec<usize>)>;
 }
 
 impl WatershedUtils for dyn Watershed {}
@@ -641,11 +673,11 @@ impl WatershedUtils for dyn Watershed + Send + Sync {}
 pub struct MergingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
-  plot_path: std::path::PathBuf,
+  plot_path: Option<std::path::PathBuf>,
   #[cfg(feature = "plots")]
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
-  max_water_level: u8
+  max_water_level: u8,
 }
 
 impl Watershed for MergingWatershed {
@@ -654,7 +686,6 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-
     //(1) make an image for holding the different water colours
     let shape = [input.shape()[0], input.shape()[1]];
     let mut output = nd::Array2::<usize>::zeros(shape);
@@ -799,13 +830,15 @@ impl Watershed for MergingWatershed {
 
         //(iii) Plot current state of the watershed transform
         #[cfg(feature = "plots")]
-        if let Err(err) = plotting::plot_slice(
-          output.view(),
-          &self.plot_path.join(&format!("ws_lvl{water_level}.png")),
-          self.plot_colour_map,
-        ) {
-          println!("Could not make watershed plot. Error: {err}")
-        };
+        if let Some(ref path) = self.plot_path {
+          if let Err(err) = plotting::plot_slice(
+            output.view(),
+            &path.join(&format!("ws_lvl{water_level}.png")),
+            self.plot_colour_map,
+          ) {
+            println!("Could not make watershed plot. Error: {err}")
+          }
+        }
 
         //(iv) print performance report
         #[cfg(all(feature = "debug", feature = "progress"))]
@@ -837,18 +870,18 @@ impl Watershed for MergingWatershed {
 pub struct SegmentingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
-  plot_path: std::path::PathBuf,
+  plot_path: Option<std::path::PathBuf>,
   #[cfg(feature = "plots")]
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
-  max_water_level: u8
+  max_water_level: u8,
 }
 
 impl Watershed for SegmentingWatershed {
   fn transform(
     &self,
     input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)]
+    seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
     //(1) make an image for holding the different water colours
     let shape = [input.shape()[0], input.shape()[1]];
@@ -969,13 +1002,15 @@ impl Watershed for SegmentingWatershed {
 
         //(iii) Plot current state of the watershed transform
         #[cfg(feature = "plots")]
-        if let Err(err) = plotting::plot_slice(
-          output.view(),
-          &self.plot_path.join(&format!("ws_lvl{water_level}.png")),
-          self.plot_colour_map,
-        ) {
-          println!("Could not make watershed plot. Error: {err}")
-        };
+        if let Some(ref path) = self.plot_path {
+          if let Err(err) = plotting::plot_slice(
+            output.view(),
+            &path.join(&format!("ws_lvl{water_level}.png")),
+            self.plot_colour_map,
+          ) {
+            println!("Could not make watershed plot. Error: {err}")
+          }
+        }
 
         //(iv) print performance report
         #[cfg(all(feature = "debug", feature = "progress"))]
