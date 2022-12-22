@@ -48,7 +48,9 @@ fn open_cgps() {
   let mut lock = CGPS_DATA.write().unwrap();
 
   //Check an extra time if the data is really not written yet
-  if lock.is_some() {return;}
+  if lock.is_some() {
+    return;
+  }
 
   let path = &get_root_path().join("full_cube.fits");
   let mut fits_file = rsf::Fits::open(std::path::Path::new(path)).unwrap();
@@ -70,7 +72,9 @@ fn open_cgps_smooth() {
   let mut lock = SMOOTH_CGPS_DATA.write().unwrap();
 
   //Check an extra time if the data is really not written yet
-  if lock.is_some() {return;}
+  if lock.is_some() {
+    return;
+  }
 
   let path = &get_root_path().join("full_cube_smoothed.fits");
   let mut fits_file = rsf::Fits::open(std::path::Path::new(path)).unwrap();
@@ -105,8 +109,12 @@ fn test_merging_uniform() {
   let mins = &watershed.find_local_minima(rf.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(rf.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    rf.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(rf.view(), mins);
@@ -129,8 +137,12 @@ fn test_segmenting_uniform() {
   let mins = &watershed.find_local_minima(rf.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(rf.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    rf.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(rf.view(), mins);
@@ -154,8 +166,12 @@ fn test_merging_poisson() {
   let mins = &watershed.find_local_minima(rf.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(rf.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    rf.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(rf.view(), mins);
@@ -172,15 +188,19 @@ fn test_segmenting_poisson() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
 
   //run pre-processor and find minima
   let rf = watershed.pre_processor(rf.view());
   let mins = &watershed.find_local_minima(rf.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(rf.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    rf.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(rf.view(), mins);
@@ -193,7 +213,9 @@ fn test_merging_real() {
   println!("Loading reduced data cube");
   let root = get_root_path();
   let mut lock = CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps();
     lock = CGPS_DATA.read().unwrap();
@@ -213,8 +235,12 @@ fn test_merging_real() {
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -228,7 +254,9 @@ fn test_segmenting_real() {
   let root = get_root_path();
   let lock = CGPS_DATA.read().unwrap();
   let mut lock = CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps();
     lock = CGPS_DATA.read().unwrap();
@@ -241,15 +269,19 @@ fn test_segmenting_real() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -262,7 +294,9 @@ fn test_merging_real_with_nan() {
   println!("Loading reduced data cube");
   let root = get_root_path();
   let mut lock = CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps();
     lock = CGPS_DATA.read().unwrap();
@@ -282,8 +316,12 @@ fn test_merging_real_with_nan() {
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -296,7 +334,9 @@ fn test_segmenting_real_with_nan() {
   println!("Loading reduced data cube");
   let root = get_root_path();
   let mut lock = CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps();
     lock = CGPS_DATA.read().unwrap();
@@ -309,15 +349,19 @@ fn test_segmenting_real_with_nan() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -350,8 +394,12 @@ fn test_merging_gaussian() {
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -365,7 +413,7 @@ fn test_segmenting_gaussian() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(
@@ -384,8 +432,12 @@ fn test_segmenting_gaussian() {
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -398,12 +450,14 @@ fn test_merging_real_smoothed() {
   println!("Loading reduced data cube");
   let root = get_root_path();
   let mut lock = SMOOTH_CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps_smooth();
     lock = SMOOTH_CGPS_DATA.read().unwrap();
     lock.as_ref().unwrap()
-  }; 
+  };
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
@@ -418,8 +472,12 @@ fn test_merging_real_smoothed() {
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
@@ -432,12 +490,14 @@ fn test_segmenting_real_smoothed() {
   println!("Loading reduced data cube");
   let root = get_root_path();
   let mut lock = SMOOTH_CGPS_DATA.read().unwrap();
-  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+  let data_cube = if lock.is_some() {
+    lock.as_ref().unwrap()
+  } else {
     drop(lock);
     open_cgps_smooth();
     lock = SMOOTH_CGPS_DATA.read().unwrap();
     lock.as_ref().unwrap()
-  }; 
+  };
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
@@ -445,15 +505,19 @@ fn test_segmenting_real_smoothed() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging(&root).build().unwrap();
+  let watershed = TransformBuilder::new_segmenting(&root).build().unwrap();
 
   //run pre-processor and find minima
   let img = watershed.pre_processor(img.view());
   let mins = &watershed.find_local_minima(img.view());
 
   //Plot original
-  rustronomy_watershed::plotting::plot_slice(img.view(), &root.join("original.png"), color_maps::viridis)
-    .unwrap();
+  rustronomy_watershed::plotting::plot_slice(
+    img.view(),
+    &root.join("original.png"),
+    color_maps::viridis,
+  )
+  .unwrap();
 
   //Do transform
   watershed.transform(img.view(), mins);
