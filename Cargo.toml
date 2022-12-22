@@ -1,0 +1,66 @@
+#  Copyright© 2022 Raúl Wolters(1)
+#
+#  This file is part of rustronomy-watershed.
+#
+#  rustronomy is free software: you can redistribute it and/or modify it under
+#  the terms of the European Union Public License version 1.2 or later, as
+#  published by the European Commission.
+#
+#  rustronomy is distributed in the hope that it will be useful, but WITHOUT ANY
+#  WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+#  A PARTICULAR PURPOSE. See the European Union Public License for more details.
+#
+#  You should have received a copy of the EUPL in an/all official language(s) of
+#  the European Union along with rustronomy.  If not, see 
+#  <https://ec.europa.eu/info/european-union-public-licence_en/>.
+#
+#  (1) Resident of the Kingdom of the Netherlands; agreement between licensor and
+#  licensee subject to Dutch law as per article 15 of the EUPL.
+
+[package]
+name = "rustronomy-watershed"
+version = "0.1.0"
+edition = "2021"
+readme = "./README.md"
+license = "EUPLv1.6"
+authors = ["Raúl Wolters <rawolters11@gmail.com>"]
+description = "core dependency for rustronomy crates providing interoperable types"
+keywords = ["astronomy", "astrophysics", "rustronomy", "image processing", "watershed"]
+categories = ["science", "algorithms"]
+
+[features]
+default = []
+jemalloc = ["dep:jemallocator"]
+plots = ["dep:plotters"]
+progress = ["dep:indicatif"]
+debug = []
+
+[dependencies]
+#Arrays and parallel array iterators
+ndarray = {version="0.15", features=["rayon"]}
+
+#Better allocator
+jemallocator = { version = "0.5", optional = true }
+
+#Progress bars
+indicatif = { version = "0.17", optional = true }
+
+#Plotting
+plotters = { version = "0.3", optional = true }
+
+#Number utils
+num-traits = "0.2"
+
+#Concurrency
+rayon = "1"
+
+#Random numbers
+rand = "0.8"
+
+[dev-dependencies]
+ndarray-rand = "0.14"
+rustronomy-fits = "0.2"
+
+[package.metadata.cargo-all-features]
+# If your crate has a large number of optional dependencies, skip them for speed
+skip_optional_dependencies = true
