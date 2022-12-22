@@ -22,9 +22,67 @@
 #![doc(
   html_logo_url = "https://raw.githubusercontent.com/smups/rustronomy/main/logos/Rustronomy_ferris.png?raw=true"
 )]
+//! Rustronomy-watershed is a pure-rust implementation of the segmenting and merging
+//! watershed algorithms (see Digabel & Lantuéjoul, 1978[^1]).
+//! 
+//! # Features
+//! Two main versions of the watershed algorithm are included in this crate.
+//! 1. The *merging* watershed algorithm, which is a void-filling algorithm that
+//! can be used to identify connected regions in image.
+//! 2. The *segmenting* watershed algorithm, which is a well-known image
+//! segmentation algorithm.
+//!
+//! In addition, `rustronomy-watershed` provides extra functionality which can be
+//! accessed via cargo feature gates. A list of all additional features [can be found
+//! below](#cargo-feature-gates).
 //!
 //! 
+//! # Quickstart
+//! To use the latest release of Rustronomy-watershed in a cargo project, add
+//! the rustronomy-watershed crate as a dependency to your `Cargo.toml` file:
+//! ```toml
+//! [dependencies]
+//! rustronomy-watershed = "0.1.0"
+//! ```
+//! To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the
+//! following code:
+//! ```rust
+//! :dep rustronomy-watershed = {version = "0.1"}
+//! ```
+//! If you want to use the latest (unstable) development version of
+//! rustronomy-watershed, you can do so by using the `git` field (which fetches
+//! the latest version from the repo) rather than the `version` field
+//! (which downloads the latest released version from crates.io). 
+//! ```
+//! {git = "https://github.com/smups/rustronomy-watershed"}
+//! ```
 //! 
+//! ## Short example: computing the Watershed transform of a random field
+//! `rustronomy-watershed` uses the commonly used "builder pattern" to configure
+//! the watershed transform before executing it. To configure a transform,
+//! create an instance of the `TransformBuilder` struct. Once you are done specifying
+//! options for the builder struct using its associated functions, call the
+//! `build()` function to generate a (`Sync`&`Send`) watershed transform object,
+//! which you can now use to execute the configured transform.
+//! 
+//! In this example, we compute the watershed transform of a uniform random field.
+//! The random field can be generated with the `ndarray_rand` crate. To configure a
+//! new watershed transform, one can use the `TransformBuilder` struct which is
+//! included in the `rustronomy_watershed` prelude.
+//! ```rust
+//! use rustronomy_watershed::prelude::*;
+//! use ndarray_rand::{rand_distr::Uniform, RandomExt};
+//!
+//! //Create a random uniform distribution
+//! let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
+//! //Set-up the watershed transform
+//! let watershed = TransformBuilder::new_merging().build().unwrap();
+//! //Find minima of the random field (to be used as seeds)
+//! let rf_mins = watershed.find_local_minima(rf.view());
+//! //Execute the watershed transform
+//! let lakes = watershed.transform(rf.view(), &rf_mins)
+//! ```
+//! [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
 //! 
 //! # Cargo feature gates
 //! *By default, all features behind cargo feature gates are **disabled***
@@ -49,7 +107,15 @@
 //! dependencies.
 //! 
 //! ## `plots` feature gate
-//! Enabling the `plots` feature gate breaks 
+//! Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
+//! struct: `set_plot_colour_map`, which can be used to set the colour map that
+//! will be used by `plotters` to generate the images and `set_plot_folder`, which
+//! can be used to specify folder where the generated images should be placed. If
+//! no output folder is specified when the `plots` feature is enabled, no plots will
+//! be generated (code will still compile).
+//! 
+//! The generated plots are png files with no text. Each pixel in the generated 
+//! images corresponds 1:1 to a pixel in the input array.
 
 //Unconditional imports
 use ndarray as nd;
@@ -358,6 +424,8 @@ mod performance_monitoring {
 }
 
 #[cfg(feature = "plots")]
+/// This module contains all the code required to generate images from the 
+/// watershed array, including all the included colour maps.
 pub mod plotting {
   use ndarray as nd;
   use num_traits::ToPrimitive;
@@ -501,6 +569,21 @@ pub mod plotting {
 use plotters::prelude::*;
 
 #[derive(Debug, Clone, Default)]
+/// Builder for configuring a watershed transform.
+/// 
+/// Use the `new_segmenting()` associated function to start configuring a
+/// segmenting watershed transform. Use the `new_merging()` associated function
+/// to start configuring a merging watershed transform. Once you have enabled
+/// the desired functionality, a watershed transform object can be generated with
+/// the `build()` associated function. This returns a trait object of the type
+/// `Box<dyn Watershed + Send + Sync>, which can be shared between threads.
+/// 
+/// Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
+/// struct: `set_plot_colour_map`, which can be used to set the colour map that
+/// will be used by `plotters` to generate the images and `set_plot_folder`, which
+/// can be used to specify folder where the generated images should be placed. If
+/// no output folder is specified when the `plots` feature is enabled, no plots will
+/// be generated (code will still compile).
 pub struct TransformBuilder {
   //Plotting options
   #[cfg(feature = "plots")]
@@ -517,16 +600,19 @@ pub struct TransformBuilder {
 
 impl TransformBuilder {
   #[cfg(not(feature = "plots"))]
+  /// creates a new `TransformBuilder` configured for a segmenting transform
   pub fn new_segmenting() -> Self {
     TransformBuilder { segmenting: true, max_water_level: NORMAL_MAX }
   }
 
   #[cfg(not(feature = "plots"))]
+  /// creates a new `TransformBuilder` configured for a merging transform
   pub fn new_merging() -> Self {
     TransformBuilder { segmenting: false, max_water_level: NORMAL_MAX }
   }
 
   #[cfg(feature = "plots")]
+  /// creates a new `TransformBuilder` configured for a segmenting transform
   pub fn new_segmenting() -> Self {
     TransformBuilder {
       plot_path: None,
@@ -537,6 +623,7 @@ impl TransformBuilder {
   }
 
   #[cfg(feature = "plots")]
+  /// creates a new `TransformBuilder` configured for a merging transform
   pub fn new_merging() -> Self {
     TransformBuilder {
       plot_path: None,
@@ -546,12 +633,16 @@ impl TransformBuilder {
     }
   }
 
+  /// Set the maximum water level that the transform will reach. Note that the
+  /// maximum water level may not be set higher than `u8::MAX - 1` (254).
   pub fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
     self.max_water_level = max_water_lvl;
     self
   }
 
   #[cfg(feature = "plots")]
+  /// Set a custom colour map to be used by `plotters` when generating images
+  /// of the watershed transform.
   pub fn set_plot_colour_map(
     mut self,
     colour_map: fn(
@@ -565,13 +656,19 @@ impl TransformBuilder {
   }
 
   #[cfg(feature = "plots")]
+  /// Set output folder for the images generated during the watershed transform.
+  /// If no output folder is specified, no images will be generated, even with
+  /// the `plots` feature gate enabled.
   pub fn set_plot_folder(mut self, path: &std::path::Path) -> Self {
     self.plot_path = Some(path.to_path_buf());
     self
   }
 
   #[cfg(feature = "plots")]
-  pub fn build(self) -> Result<Box<dyn Watershed>, String> {
+  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
+  /// configuration. This function may return an `Err` result if the builder
+  /// was not properly configured.
+  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     //Check if the max water level is not higher than than NORMAL MAX
     if self.max_water_level > NORMAL_MAX {
       Err(format!(
@@ -596,6 +693,9 @@ impl TransformBuilder {
   }
 
   #[cfg(not(feature = "plots"))]
+  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
+  /// configuration. This function will currently **never** return an `Err`
+  /// variant and can be safely unwrapped.
   pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     if self.segmenting {
       Ok(Box::new(SegmentingWatershed { max_water_level: self.max_water_level }))
@@ -605,7 +705,20 @@ impl TransformBuilder {
   }
 }
 
+/// This trait contains useful functions for preparing images to be used as input
+/// for a watershed transform
 pub trait WatershedUtils {
+  /// The `pre_processor` function can convert an array of any numeric data-type
+  /// `T` into an array of `u8`. It converts special float values (if `T` is a
+  /// float type) to `u8` values that implementations of the watershed transform
+  /// in this crate know how to handle.
+  /// 
+  /// In particular: `NaN` and positive infinity are mapped to the special
+  /// `NEVER_FILL` value, and negative infinity is mapped to the special `ALWAYS_FILL`
+  /// value.
+  /// 
+  /// This function also automatically clamps the pixel values of the array to
+  /// the full range of non-special `u8` values.
   fn pre_processor<T, D>(&self, img: nd::ArrayView<T, D>) -> nd::Array<u8, D>
   where
     T: Num + Copy + ToPrimitive + PartialOrd,
@@ -640,6 +753,9 @@ pub trait WatershedUtils {
     })
   }
 
+  /// returns a vec of the positions of all the pixels that have a lower value
+  /// than all their 8-way connected neighbours. Useful for generating seeds for
+  /// the watershed transform.
   fn find_local_minima(&self, img: nd::ArrayView2<u8>) -> Vec<(usize, usize)> {
     //Window size and index of center window pixel
     const WINDOW: (usize, usize) = (3, 3);
@@ -662,6 +778,9 @@ pub trait WatershedUtils {
   }
 }
 
+/// Actual trait for performing the watershed transform. It is implemented in
+/// different ways by different versions of the algorithm. This trait is dyn-safe,
+/// which means that trait objects may be constructed from it.
 pub trait Watershed {
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)])
     -> Vec<(u8, Vec<usize>)>;
@@ -670,6 +789,37 @@ pub trait Watershed {
 impl WatershedUtils for dyn Watershed {}
 impl WatershedUtils for dyn Watershed + Send + Sync {}
 
+/// Implementation of the merging watershed algorithm.
+/// 
+/// See crate-level documentation for a general introduction to the algorithm.
+/// 
+/// The merging watershed transform is a slight variation on the segmenting
+/// algorithm (see docs of the `SegmentingWatershed` struct). Instead of creating
+/// a wall whenever two lakes meet, the merging watershed transform merges the
+/// two lakes. 
+/// 
+/// On a statistics level, the main difference between the merging and segmenting
+/// watershed transforms is that the number of distinct lakes in the merging
+/// watershed transform depends on the features in the image rather than the
+/// number of (somewhat arbitrarily chosen) lake-seeds. Therefore, one can do
+/// statistics with the number of lakes. In addition, the output of the merging
+/// transform does not depend strongly on the precise way the minima were chosen.
+/// 
+/// # Memory usage
+/// The watershed transform creates an `Array2<usize>` of the same size as the
+/// input array, which takes up a considerable amount of memory. In addition, it
+/// allocates space for a colour-map (`Vec<usize>` with a length equal to the
+/// number of seeds) and some other intermediate, smaller vec's. One can count on
+/// the memory usage being about ~2.5x the size of the input array. 
+/// 
+/// # Output
+/// Running the merging watershed transform returns a list of the sizes of all
+/// the lakes per tested water level as a `Vec<Vec<usize>>`.
+/// 
+/// # Artifacts and peculiarities
+/// Due to some implementation details, the 1px-wide edges of the input array are
+/// not accessible to the watershed transform. They will thus remain unfilled for
+/// the entire duration of the transform.
 pub struct MergingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
@@ -867,6 +1017,34 @@ impl Watershed for MergingWatershed {
   }
 }
 
+/// Implementation of the segmenting watershed algorithm.
+/// 
+/// See crate-level documentation for a general introduction to the algorithm.
+/// 
+/// The segmenting watershed algorithm forms lakes from pre-defined local minima
+/// by raising an imaginary water level. Once the water level increases past the
+/// height of a minimum, it starts filling neighbouring pixels that are also
+/// below the water level. These poodles grow larger as the water level rises.
+/// 
+/// When two lakes originating from different local minima meet, an infinitely
+/// high wall separating the two is created. This is wall-building is what makes
+/// this version of the watershed algorithm an image *segmentation* algorithm.
+/// 
+/// # Memory usage
+/// The watershed transform creates an `Array2<usize>` of the same size as the
+/// input array, which takes up a considerable amount of memory. In addition, it
+/// allocates space for a colour-map (`Vec<usize>` with a length equal to the
+/// number of seeds) and some other intermediate, smaller vec's. One can count on
+/// the memory usage being about ~2.5x the size of the input array. 
+/// 
+/// # Output
+/// Running the merging watershed transform returns a list of the sizes of all
+/// the lakes per tested water level as a `Vec<Vec<usize>>`.
+/// 
+/// # Artifacts and peculiarities
+/// Due to some implementation details, the 1px-wide edges of the input array are
+/// not accessible to the watershed transform. They will thus remain unfilled for
+/// the entire duration of the transform.
 pub struct SegmentingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
