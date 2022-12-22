@@ -30,7 +30,7 @@ exclude = [
 ]
 authors = ["Raúl Wolters <rawolters11@gmail.com>"]
 description = "a pure-rust implementation of the segmenting and merging watershed algorithms"
-keywords = ["astronomy", "astrophysics", "rustronomy", "image processing", "watershed"]
+keywords = ["astronomy", "astrophysics", "rustronomy", "image-processing", "watershed"]
 categories = ["science", "algorithms"]
 
 [features]
