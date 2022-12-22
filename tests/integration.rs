@@ -19,6 +19,8 @@
   licensee subject to Dutch law as per article 15 of the EUPL.
 */
 
+use std::sync::RwLock;
+
 use ndarray as nd;
 use ndarray_rand::{
   rand_distr::{Poisson, Uniform},
@@ -30,6 +32,9 @@ use rustronomy_watershed::prelude::*;
 //This constant determines the randomly generated images' sizes
 const RF_SIZE: (usize, usize) = (1000, 1000);
 
+static CGPS_DATA: RwLock<Option<nd::Array3<f64>>> = RwLock::new(None);
+static SMOOTH_CGPS_DATA: RwLock<Option<nd::Array3<f64>>> = RwLock::new(None);
+
 fn get_root_path() -> std::path::PathBuf {
   const DATA_ENV: &str = "WSRS_DATA_PATH";
   let root_path =
@@ -39,7 +44,13 @@ fn get_root_path() -> std::path::PathBuf {
     .expect(&format!("could not canonicalize path found in ${DATA_ENV} env. variable"))
 }
 
-fn open_image(path: &std::path::Path) -> nd::Array<f64, nd::Ix3> {
+fn open_cgps() {
+  let mut lock = CGPS_DATA.write().unwrap();
+
+  //Check an extra time if the data is really not written yet
+  if lock.is_some() {return;}
+
+  let path = &get_root_path().join("full_cube.fits");
   let mut fits_file = rsf::Fits::open(std::path::Path::new(path)).unwrap();
 
   let (header, data) = fits_file.remove_hdu(0).unwrap().to_parts();
@@ -51,7 +62,30 @@ fn open_image(path: &std::path::Path) -> nd::Array<f64, nd::Ix3> {
   };
 
   //Datacube is 3D: we hebben 2D image in 272 verschillende channels.
-  array.into_dimensionality().unwrap()
+  let array = array.into_dimensionality().unwrap();
+  lock.replace(array);
+}
+
+fn open_cgps_smooth() {
+  let mut lock = SMOOTH_CGPS_DATA.write().unwrap();
+
+  //Check an extra time if the data is really not written yet
+  if lock.is_some() {return;}
+
+  let path = &get_root_path().join("full_cube_smoothed.fits");
+  let mut fits_file = rsf::Fits::open(std::path::Path::new(path)).unwrap();
+
+  let (header, data) = fits_file.remove_hdu(0).unwrap().to_parts();
+  print!("{header}");
+
+  let array = match data.unwrap() {
+    rsf::Extension::Image(img) => img.as_owned_f64_array().unwrap(),
+    _ => panic!(),
+  };
+
+  //Datacube is 3D: we hebben 2D image in 272 verschillende channels.
+  let array = array.into_dimensionality().unwrap();
+  lock.replace(array);
 }
 
 #[cfg(feature = "plots")]
@@ -158,7 +192,13 @@ fn test_merging_real() {
   //Load image -> pick image with no NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube.fits"));
+  let mut lock = CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps();
+    lock = CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  };
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
@@ -186,7 +226,14 @@ fn test_segmenting_real() {
   //Load image -> pick image with no NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube.fits"));
+  let lock = CGPS_DATA.read().unwrap();
+  let mut lock = CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps();
+    lock = CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  };
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
@@ -214,7 +261,13 @@ fn test_merging_real_with_nan() {
   //Load image -> pick slice with lots of NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube.fits"));
+  let mut lock = CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps();
+    lock = CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  };
   let img = data_cube.slice(nd::s![.., .., 0]);
 
   //make output folder and configure the watershed transform
@@ -242,7 +295,13 @@ fn test_segmenting_real_with_nan() {
   //Load image -> pick slice with lots of NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube.fits"));
+  let mut lock = CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps();
+    lock = CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  };
   let img = data_cube.slice(nd::s![.., .., 0]);
 
   //make output folder and configure the watershed transform
@@ -338,7 +397,13 @@ fn test_merging_real_smoothed() {
   //Load image -> pick image with no NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube_smoothed.fits"));
+  let mut lock = SMOOTH_CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps_smooth();
+    lock = SMOOTH_CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  }; 
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
@@ -366,7 +431,13 @@ fn test_segmenting_real_smoothed() {
   //Load image -> pick image with no NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let data_cube = open_image(&root.join("full_cube_smoothed.fits"));
+  let mut lock = SMOOTH_CGPS_DATA.read().unwrap();
+  let data_cube = if lock.is_some() { lock.as_ref().unwrap() } else {
+    drop(lock);
+    open_cgps_smooth();
+    lock = SMOOTH_CGPS_DATA.read().unwrap();
+    lock.as_ref().unwrap()
+  }; 
   let img = data_cube.slice(nd::s![.., .., 120]);
 
   //make output folder and configure the watershed transform
