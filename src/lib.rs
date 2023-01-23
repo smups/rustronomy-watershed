@@ -133,10 +133,10 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 use indicatif;
 
 //Constants for pixels that have to be left uncoloured, or have to be coloured
-const UNCOLOURED: usize = 0;
-const NORMAL_MAX: u8 = u8::MAX - 1;
-const ALWAYS_FILL: u8 = u8::MIN;
-const NEVER_FILL: u8 = u8::MAX;
+pub const UNCOLOURED: usize = 0;
+pub const NORMAL_MAX: u8 = u8::MAX - 1;
+pub const ALWAYS_FILL: u8 = u8::MIN;
+pub const NEVER_FILL: u8 = u8::MAX;
 
 //Utility prelude for batch import
 pub mod prelude {
@@ -724,6 +724,65 @@ pub trait WatershedUtils {
     T: Num + Copy + ToPrimitive + PartialOrd,
     D: nd::Dimension,
   {
+    self.pre_processor_with_max::<NORMAL_MAX, T, D>(img)
+  }
+
+  // The `pre_processor_with` function can convert an array of any numeric data-type
+  /// `T` into an array of `u8`. It converts special float values (if `T` is a
+  /// float type) to `u8` values that implementations of the watershed transform
+  /// in this crate know how to handle.
+  ///
+  /// In particular: `NaN` and positive infinity are mapped to the special
+  /// `NEVER_FILL` value, and negative infinity is mapped to the special `ALWAYS_FILL`
+  /// value.
+  ///
+  /// This function also automatically clamps the pixel values of the array to
+  /// the range between 0 and the supplied MAX constant.
+  /// 
+  /// # example usage
+  /// This function can be used as a replacement for the pre-processor if you want
+  /// to normalise the input to the water transform to a different range than
+  /// `1..u8::MAX-1`, like so:
+  /// ```rust
+  /// use rustronomy_watershed::prelude::*;
+  /// use ndarray_rand::{rand_distr::Uniform, RandomExt};
+  ///
+  /// //Set custom maximum waterlevel
+  /// const MY_MAX: u8 = 127;
+  /// 
+  /// //Create a random uniform distribution
+  /// let rf = nd::Array2::<f64>::random((512, 512), Uniform::new(0.0, 1.0));
+  /// 
+  /// //Set-up the watershed transform
+  /// let watershed = TransformBuilder::new_segmenting()
+  ///     .set_max_water_lvl(MY_MAX)
+  ///     .build()
+  ///     .unwrap();
+  /// 
+  /// //Run pre-processor (using turbofish syntax)
+  /// let rf = watershed.pre_processor_with_max::<MYMAX, _, _>(rf.view());
+  /// 
+  /// //Find minima of the random field (to be used as seeds)
+  /// let rf_mins = watershed.find_local_minima(rf.view());
+  /// //Execute the watershed transform
+  /// let output = watershed.transform(rf.view(), &rf_mins)
+  /// ```
+  ///
+  /// # panics
+  /// This function panics if MAX is bigger than or equal to `NEVER_FILL`, or
+  /// smaller than or equal to `ALWAYS_FILL`.
+  fn pre_processor_with_max<const MAX: u8, T, D>(
+    &self,
+    img: nd::ArrayView<T, D>,
+  ) -> nd::Array<u8, D>
+  where
+    T: Num + Copy + ToPrimitive + PartialOrd,
+    D: nd::Dimension,
+  {
+    //Panic if MAX is invalid (dear compiler, please remove this code path ty <3)
+    assert!(MAX < NEVER_FILL);
+    assert!(MAX > ALWAYS_FILL);
+
     //Calculate max and min values
     let min = img
       .iter()
@@ -742,7 +801,7 @@ pub trait WatershedUtils {
       if float.is_normal() {
         //Clamp value to [0,1] range and then to [0, u8::MAX)
         let normal = (float - min) / (max - min);
-        (normal * NORMAL_MAX as f64).to_u8().unwrap()
+        (normal * MAX as f64).to_u8().unwrap()
       } else if float.is_infinite() && !float.is_nan() {
         //negative infinity, always fill
         ALWAYS_FILL
