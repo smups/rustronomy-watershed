@@ -42,12 +42,12 @@
 //! the rustronomy-watershed crate as a dependency to your `Cargo.toml` file:
 //! ```toml
 //! [dependencies]
-//! rustronomy-watershed = "0.1.0"
+//! rustronomy-watershed = "0.2.0"
 //! ```
 //! To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the
 //! following code:
 //! ```rust
-//! :dep rustronomy-watershed = {version = "0.1"}
+//! :dep rustronomy-watershed = {version = "0.2"}
 //! ```
 //! If you want to use the latest (unstable) development version of
 //! rustronomy-watershed, you can do so by using the `git` field (which fetches
@@ -76,11 +76,11 @@
 //! //Create a random uniform distribution
 //! let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
 //! //Set-up the watershed transform
-//! let watershed = TransformBuilder::new_merging().build().unwrap();
+//! let watershed = TransformBuilder::new_segmenting().build().unwrap();
 //! //Find minima of the random field (to be used as seeds)
 //! let rf_mins = watershed.find_local_minima(rf.view());
 //! //Execute the watershed transform
-//! let lakes = watershed.transform(rf.view(), &rf_mins)
+//! let output = watershed.transform(rf.view(), &rf_mins)
 //! ```
 //! [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
 //!
