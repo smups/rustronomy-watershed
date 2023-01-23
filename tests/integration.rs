@@ -252,7 +252,6 @@ fn test_segmenting_real() {
   //Load image -> pick image with no NaN's
   println!("Loading reduced data cube");
   let root = get_root_path();
-  let lock = CGPS_DATA.read().unwrap();
   let mut lock = CGPS_DATA.read().unwrap();
   let data_cube = if lock.is_some() {
     lock.as_ref().unwrap()
