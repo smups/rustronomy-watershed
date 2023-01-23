@@ -24,7 +24,7 @@
 )]
 //! Rustronomy-watershed is a pure-rust implementation of the segmenting and merging
 //! watershed algorithms (see Digabel & Lantuéjoul, 1978[^1]).
-//! 
+//!
 //! # Features
 //! Two main versions of the watershed algorithm are included in this crate.
 //! 1. The *merging* watershed algorithm, which is a void-filling algorithm that
@@ -36,7 +36,7 @@
 //! accessed via cargo feature gates. A list of all additional features [can be found
 //! below](#cargo-feature-gates).
 //!
-//! 
+//!
 //! # Quickstart
 //! To use the latest release of Rustronomy-watershed in a cargo project, add
 //! the rustronomy-watershed crate as a dependency to your `Cargo.toml` file:
@@ -52,11 +52,11 @@
 //! If you want to use the latest (unstable) development version of
 //! rustronomy-watershed, you can do so by using the `git` field (which fetches
 //! the latest version from the repo) rather than the `version` field
-//! (which downloads the latest released version from crates.io). 
+//! (which downloads the latest released version from crates.io).
 //! ```
 //! {git = "https://github.com/smups/rustronomy-watershed"}
 //! ```
-//! 
+//!
 //! ## Short example: computing the Watershed transform of a random field
 //! `rustronomy-watershed` uses the commonly used "builder pattern" to configure
 //! the watershed transform before executing it. To configure a transform,
@@ -64,7 +64,7 @@
 //! options for the builder struct using its associated functions, call the
 //! `build()` function to generate a (`Sync`&`Send`) watershed transform object,
 //! which you can now use to execute the configured transform.
-//! 
+//!
 //! In this example, we compute the watershed transform of a uniform random field.
 //! The random field can be generated with the `ndarray_rand` crate. To configure a
 //! new watershed transform, one can use the `TransformBuilder` struct which is
@@ -83,7 +83,7 @@
 //! let lakes = watershed.transform(rf.view(), &rf_mins)
 //! ```
 //! [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
-//! 
+//!
 //! # Cargo feature gates
 //! *By default, all features behind cargo feature gates are **disabled***
 //! - `jemalloc`: this feature enables the [jemalloc allocator](https://jemalloc.net).
@@ -105,7 +105,7 @@
 //! - `debug`: this feature enables debug and performance monitoring output. This
 //! can negatively impact performance. Enabling this feature does not add additional
 //! dependencies.
-//! 
+//!
 //! ## `plots` feature gate
 //! Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
 //! struct: `set_plot_colour_map`, which can be used to set the colour map that
@@ -113,8 +113,8 @@
 //! can be used to specify folder where the generated images should be placed. If
 //! no output folder is specified when the `plots` feature is enabled, no plots will
 //! be generated (code will still compile).
-//! 
-//! The generated plots are png files with no text. Each pixel in the generated 
+//!
+//! The generated plots are png files with no text. Each pixel in the generated
 //! images corresponds 1:1 to a pixel in the input array.
 
 //Unconditional imports
@@ -424,7 +424,7 @@ mod performance_monitoring {
 }
 
 #[cfg(feature = "plots")]
-/// This module contains all the code required to generate images from the 
+/// This module contains all the code required to generate images from the
 /// watershed array, including all the included colour maps.
 pub mod plotting {
   use ndarray as nd;
@@ -570,14 +570,14 @@ use plotters::prelude::*;
 
 #[derive(Debug, Clone, Default)]
 /// Builder for configuring a watershed transform.
-/// 
+///
 /// Use the `new_segmenting()` associated function to start configuring a
 /// segmenting watershed transform. Use the `new_merging()` associated function
 /// to start configuring a merging watershed transform. Once you have enabled
 /// the desired functionality, a watershed transform object can be generated with
 /// the `build()` associated function. This returns a trait object of the type
 /// `Box<dyn Watershed + Send + Sync>, which can be shared between threads.
-/// 
+///
 /// Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
 /// struct: `set_plot_colour_map`, which can be used to set the colour map that
 /// will be used by `plotters` to generate the images and `set_plot_folder`, which
@@ -712,11 +712,11 @@ pub trait WatershedUtils {
   /// `T` into an array of `u8`. It converts special float values (if `T` is a
   /// float type) to `u8` values that implementations of the watershed transform
   /// in this crate know how to handle.
-  /// 
+  ///
   /// In particular: `NaN` and positive infinity are mapped to the special
   /// `NEVER_FILL` value, and negative infinity is mapped to the special `ALWAYS_FILL`
   /// value.
-  /// 
+  ///
   /// This function also automatically clamps the pixel values of the array to
   /// the full range of non-special `u8` values.
   fn pre_processor<T, D>(&self, img: nd::ArrayView<T, D>) -> nd::Array<u8, D>
@@ -782,40 +782,82 @@ pub trait WatershedUtils {
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
 pub trait Watershed {
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)])
-    -> Vec<(u8, Vec<usize>)>;
+  /// Returns watershed transform of input image.
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
+
+  /// Returns a Vec containing the areas of all the lakes per water level. The
+  /// length of the nested Vec is always equal to the number of seeds, although
+  /// some lakes may have zero area (especially for the merging transform,
+  /// see docs for `MergingWatershed`)
+  fn transform_to_list(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, Vec<usize>)>;
+
+  /// Returns a list of images where each image corresponds to a snapshot of the
+  /// watershed transform at a particular water level.
+  ///
+  /// **Caution**: this function has to allocate a full image each time the water
+  /// level is raised. This significantly increases memory usage. If you just
+  /// want plots of the intermediate images, consider turning on the `plots`
+  /// feature instead.
+  fn transform_history(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, nd::Array2<usize>)>;
 }
 
 impl WatershedUtils for dyn Watershed {}
 impl WatershedUtils for dyn Watershed + Send + Sync {}
 
 /// Implementation of the merging watershed algorithm.
-/// 
+///
 /// See crate-level documentation for a general introduction to the algorithm.
-/// 
+///
 /// The merging watershed transform is a slight variation on the segmenting
 /// algorithm (see docs of the `SegmentingWatershed` struct). Instead of creating
 /// a wall whenever two lakes meet, the merging watershed transform merges the
-/// two lakes. 
-/// 
+/// two lakes.
+///
 /// On a statistics level, the main difference between the merging and segmenting
 /// watershed transforms is that the number of distinct lakes in the merging
 /// watershed transform depends on the features in the image rather than the
 /// number of (somewhat arbitrarily chosen) lake-seeds. Therefore, one can do
 /// statistics with the number of lakes. In addition, the output of the merging
 /// transform does not depend strongly on the precise way the minima were chosen.
-/// 
+///
 /// # Memory usage
 /// The watershed transform creates an `Array2<usize>` of the same size as the
 /// input array, which takes up a considerable amount of memory. In addition, it
 /// allocates space for a colour-map (`Vec<usize>` with a length equal to the
 /// number of seeds) and some other intermediate, smaller vec's. One can count on
-/// the memory usage being about ~2.5x the size of the input array. 
-/// 
+/// the memory usage being about ~2.5x the size of the input array.
+///
+/// ## Memory usage of `transform_history`
+/// The `transform_history` method makes a copy of the `Array2<usize>` image used
+/// during the watershed transform to keep track of the intermediate images. As
+/// such, it allocates a new `Array2<usize>` for each water level, which increases
+/// memory usage by a factor equal to the maximum water level as configured by
+/// the `TransformBuilder`.
+///
 /// # Output
-/// Running the merging watershed transform returns a list of the sizes of all
-/// the lakes per tested water level as a `Vec<Vec<usize>>`.
-/// 
+/// The three methods of the `Watershed` trait each return a different set of
+/// parameters based on the watershed transform of the input image:
+/// - `transform` simply returns the watershed transform of the image. This is
+/// not very interesting in the case of the merging watershed transform, since
+/// its output is just an image with all pixels having the same colour.
+/// - `transform_to_list` returns a list of the areas of all the lakes at each
+/// water level. Its return type is`Vec<(u8, Vec<usize>)>`, where the `u8` equals
+/// the water level and the `Vec<usize>` is the list of areas of all the lakes
+/// at each water level. The `Vec<usize>` is the same length for each water level,
+/// but may contain zero-sided lakes. The water levels are returned in order.
+/// - `transform_history` returns a list of intermediate images of the watershed
+/// transform at every water level. Its return type is `Vec<(u8, ndarray::Array2<usize>)`,
+/// where the `u8` holds the water level that each `Array2` snapshot was taken at.
+/// The water levels are returned in order.
+///
 /// # Artifacts and peculiarities
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
@@ -831,7 +873,7 @@ pub struct MergingWatershed {
 }
 
 impl Watershed for MergingWatershed {
-  fn transform(
+  fn transform_to_list(
     &self,
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
@@ -1010,37 +1052,233 @@ impl Watershed for MergingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (colour, lakesizes) pair
+        //(vi) Yield a (water_level, lakesizes) pair
         (water_level, lake_sizes)
+      })
+      .collect()
+  }
+
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+    //Note: the implementation of `transform` is trivial for the merging transfo
+
+    //(1) make an image for holding the different water colours
+    let shape = [input.shape()[0], input.shape()[1]];
+    let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(2) give all pixels except the edge a different colour
+    output.slice_mut(nd::s![1..shape[0] - 1, 1..shape[1] - 1]).mapv_inplace(|px| 123);
+
+    //Return the transformed image
+    return output;
+  }
+
+  fn transform_history(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, nd::Array2<usize>)> {
+    //(1) make an image for holding the different water colours
+    let shape = [input.shape()[0], input.shape()[1]];
+    let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(2) set "colours" for each of the starting points
+    // The colours should range from 1 to seeds.len(), but which seed gets which
+    // colour should be random, so we shuffle the vec.
+    // One important excpetion is the zeroth element. It should be set to zero
+    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
+    colours.shuffle(&mut rand::thread_rng());
+
+    //Colour the starting pixels
+    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
+      output[idx] = col;
+    }
+    //Set the zeroth colour to UNCOLOURED!
+    colours.insert(UNCOLOURED, UNCOLOURED);
+
+    #[cfg(feature = "debug")]
+    println!("starting with {} lakes", colours.len());
+
+    //(3) set-up progress bar
+    #[cfg(feature = "progress")]
+    let bar = set_up_bar(self.max_water_level);
+
+    //(4) count lakes for all water levels
+    (0..self.max_water_level)
+      .into_iter()
+      .map(|water_level| {
+        //(logging) make a new perfreport
+        #[cfg(feature = "debug")]
+        let mut perf = crate::performance_monitoring::PerfReport::default();
+        #[cfg(feature = "debug")]
+        let loop_start = std::time::Instant::now();
+
+        /*(i) Colour all flooded pixels connected to a source
+          We have to loop multiple times because there may be plateau's. These
+          require us to colour more than just one neighbouring pixel -> we need
+          to loop until there are no more uncoloured, flooded pixels connected to
+          a source left.
+        */
+        'colouring_loop: loop {
+          #[cfg(feature = "progress")]
+          {
+            bar.tick(); //Tick the progressbar
+          }
+          #[cfg(feature = "debug")]
+          {
+            perf.loops += 1;
+          }
+
+          #[cfg(feature = "debug")]
+          let iter_start = std::time::Instant::now();
+
+          /*(A) Find pixels to colour this iteration
+            We first look for all pixels that are uncoloured, flooded and directly
+            attached to a coloured pixel. We do this in parallel. We cannot, however,
+            change the pixel colours *and* look for pixels to colour at the same time.
+            That is why we collect all pixels to colour in a vector, and later update
+            the map.
+          */
+          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+
+          #[cfg(feature = "debug")]
+          perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
+
+          /*(B) Colour pixels that we found in step (A)
+            If there are no pixels to be coloured anymore, we can break from this
+            loop and raise the water level
+          */
+          if pix_to_colour.is_empty() {
+            //No more connected, flooded pixels left -> raise water level
+            break 'colouring_loop;
+          } else {
+            /*We have pixels to colour
+              I have to discuss safety for a moment. Since we iterated over all
+              pixels and only allowed a pixel to set its own colour, we know that
+              there is at most one colour instruction per pixel. Since the pixels
+              do not overlap in memory, we can safely access each pixel concurrently.
+              To do this, I temporarily put the output watershed canvas in a global
+              static variable that can be accessed from any thread.
+            */
+            #[cfg(feature = "debug")]
+            let colour_start = std::time::Instant::now();
+
+            pix_to_colour.into_iter().for_each(|(idx, col)| {
+              output[idx] = col;
+            });
+
+            #[cfg(feature = "debug")]
+            perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
+          }
+        }
+
+        /* (ii) Merge all touching regions
+          Now that we have coloured all colourable pixels, we have to start
+          merging regions of different colours that border each other
+          We do this by making a look-up table for the colours. Each colour can
+          look-up what its new colour will be.
+        */
+        #[cfg(feature = "debug")]
+        let merge_start = std::time::Instant::now();
+
+        //(A) Find all colours that have to be merged
+        let to_merge = find_merge(output.view());
+        let num_mergers = to_merge.len();
+
+        /*(B) construct a colour map
+          The colour map holds the output colour at the index equal to the input
+          colour. A 1->1 identity map is therefore just a vec with its index as an
+          entry.
+
+          The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
+        */
+        let mut colour_map: Vec<usize> = colours.clone();
+        make_colour_map(&mut colour_map, to_merge);
+        assert!(colour_map[UNCOLOURED] == UNCOLOURED);
+
+        //(C) Recolour the canvas with the colour map if the map is not empty
+        if num_mergers > 0 {
+          recolour(output.view_mut(), colour_map);
+        }
+        #[cfg(feature = "debug")]
+        {
+          perf.merge_ms = merge_start.elapsed().as_millis() as usize;
+        }
+
+        //(ii) We skip counting the number of lakes
+
+        //(iii) Plot current state of the watershed transform
+        #[cfg(feature = "plots")]
+        if let Some(ref path) = self.plot_path {
+          if let Err(err) = plotting::plot_slice(
+            output.view(),
+            &path.join(&format!("ws_lvl{water_level}.png")),
+            self.plot_colour_map,
+          ) {
+            println!("Could not make watershed plot. Error: {err}")
+          }
+        }
+
+        //(iv) print performance report
+        #[cfg(all(feature = "debug", feature = "progress"))]
+        {
+          //In this combination we have a progress bar, we should use it to print
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
+          bar.println(format!("{perf}"));
+        }
+        #[cfg(all(feature = "debug", not(feature = "progress")))]
+        {
+          //We do not have a progress bar, so a plain println! will have to do
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
+          println!("{perf}");
+        }
+
+        //(v) Update progressbar and plot stuff
+        #[cfg(feature = "progress")]
+        {
+          bar.inc(1);
+        }
+
+        //(vi) Yield a (water_level, image) pair
+        (water_level, output.clone())
       })
       .collect()
   }
 }
 
 /// Implementation of the segmenting watershed algorithm.
-/// 
+///
 /// See crate-level documentation for a general introduction to the algorithm.
-/// 
+///
 /// The segmenting watershed algorithm forms lakes from pre-defined local minima
 /// by raising an imaginary water level. Once the water level increases past the
 /// height of a minimum, it starts filling neighbouring pixels that are also
 /// below the water level. These poodles grow larger as the water level rises.
-/// 
+///
 /// When two lakes originating from different local minima meet, an infinitely
 /// high wall separating the two is created. This is wall-building is what makes
 /// this version of the watershed algorithm an image *segmentation* algorithm.
-/// 
-/// # Memory usage
-/// The watershed transform creates an `Array2<usize>` of the same size as the
-/// input array, which takes up a considerable amount of memory. In addition, it
-/// allocates space for a colour-map (`Vec<usize>` with a length equal to the
-/// number of seeds) and some other intermediate, smaller vec's. One can count on
-/// the memory usage being about ~2.5x the size of the input array. 
-/// 
+///
+/// ## Memory usage of `transform_history`
+/// The `transform_history` method makes a copy of the `Array2<usize>` image used
+/// during the watershed transform to keep track of the intermediate images. As
+/// such, it allocates a new `Array2<usize>` for each water level, which increases
+/// memory usage by a factor equal to the maximum water level as configured by
+/// the `TransformBuilder`.
+///
 /// # Output
-/// Running the merging watershed transform returns a list of the sizes of all
-/// the lakes per tested water level as a `Vec<Vec<usize>>`.
-/// 
+/// The three methods of the `Watershed` trait each return a different set of
+/// parameters based on the watershed transform of the input image:
+/// - `transform` simply returns the watershed transform of the image.
+/// - `transform_to_list` returns a list of the areas of all the lakes at each
+/// water level. Its return type is`Vec<(u8, Vec<usize>)>`, where the `u8` equals
+/// the water level and the `Vec<usize>` is the list of areas of all the lakes
+/// at each water level. The `Vec<usize>` is the same length for each water level,
+/// but may contain zero-sided lakes. The water levels are returned in order.
+/// - `transform_history` returns a list of intermediate images of the watershed
+/// transform at every water level. Its return type is `Vec<(u8, ndarray::Array2<usize>)`,
+/// where the `u8` holds the water level that each `Array2` snapshot was taken at.
+/// The water levels are returned in order.
+///
 /// # Artifacts and peculiarities
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
@@ -1056,7 +1294,146 @@ pub struct SegmentingWatershed {
 }
 
 impl Watershed for SegmentingWatershed {
-  fn transform(
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+    //(1) make an image for holding the different water colours
+    let shape = [input.shape()[0], input.shape()[1]];
+    let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(2) set "colours" for each of the starting points
+    // The colours should range from 1 to seeds.len(), but which seed gets which
+    // colour should be random, so we shuffle the vec.
+    // One important excpetion is the zeroth element. It should be set to zero
+    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
+    colours.shuffle(&mut rand::thread_rng());
+
+    //Colour the starting pixels
+    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
+      output[idx] = col;
+    }
+    //Set the zeroth colour to UNCOLOURED!
+    colours.insert(UNCOLOURED, UNCOLOURED);
+
+    #[cfg(feature = "debug")]
+    println!("starting with {} lakes", colours.len());
+
+    //(3) set-up progress bar
+    #[cfg(feature = "progress")]
+    let bar = set_up_bar(self.max_water_level);
+
+    //(4) count lakes for all water levels
+    (0..self.max_water_level).into_iter().for_each(|water_level| {
+      //(logging) make a new perfreport
+      #[cfg(feature = "debug")]
+      let mut perf = crate::performance_monitoring::PerfReport::default();
+      #[cfg(feature = "debug")]
+      let loop_start = std::time::Instant::now();
+
+      /*(i) Colour all flooded pixels connected to a source
+        We have to loop multiple times because there may be plateau's. These
+        require us to colour more than just one neighbouring pixel -> we need
+        to loop until there are no more uncoloured, flooded pixels connected to
+        a source left.
+      */
+      'colouring_loop: loop {
+        #[cfg(feature = "progress")]
+        {
+          bar.tick(); //Tick the progressbar
+        }
+        #[cfg(feature = "debug")]
+        {
+          perf.loops += 1;
+        }
+
+        #[cfg(feature = "debug")]
+        let iter_start = std::time::Instant::now();
+
+        /*(A) Find pixels to colour this iteration
+          We first look for all pixels that are uncoloured, flooded and directly
+          attached to a coloured pixel. We do this in parallel. We cannot, however,
+          change the pixel colours *and* look for pixels to colour at the same time.
+          That is why we collect all pixels to colour in a vector, and later update
+          the map.
+        */
+        let pix_to_colour = find_px(input.view(), output.view(), water_level);
+
+        #[cfg(feature = "debug")]
+        perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
+
+        /*(B) Colour pixels that we found in step (A)
+          If there are no pixels to be coloured anymore, we can break from this
+          loop and raise the water level
+        */
+        if pix_to_colour.is_empty() {
+          //No more connected, flooded pixels left -> raise water level
+          break 'colouring_loop;
+        } else {
+          /*We have pixels to colour
+            I have to discuss safety for a moment. Since we iterated over all
+            pixels and only allowed a pixel to set its own colour, we know that
+            there is at most one colour instruction per pixel. Since the pixels
+            do not overlap in memory, we can safely access each pixel concurrently.
+            To do this, I temporarily put the output watershed canvas in a global
+            static variable that can be accessed from any thread.
+          */
+          #[cfg(feature = "debug")]
+          let colour_start = std::time::Instant::now();
+
+          pix_to_colour.into_iter().for_each(|(idx, col)| {
+            output[idx] = col;
+          });
+
+          #[cfg(feature = "debug")]
+          perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
+        }
+      }
+
+      /* (ii) ¡DO NOT! Merge all touching regions
+        This is the main difference between the two algo's
+      */
+      #[cfg(feature = "debug")]
+      {
+        perf.merge_ms = 0; //by definition, since we're skipping this step
+      }
+
+      //(ii) DO NOT Count the number and size of lakes
+
+      //(iii) Plot current state of the watershed transform
+      #[cfg(feature = "plots")]
+      if let Some(ref path) = self.plot_path {
+        if let Err(err) = plotting::plot_slice(
+          output.view(),
+          &path.join(&format!("ws_lvl{water_level}.png")),
+          self.plot_colour_map,
+        ) {
+          println!("Could not make watershed plot. Error: {err}")
+        }
+      }
+
+      //(iv) print performance report
+      #[cfg(all(feature = "debug", feature = "progress"))]
+      {
+        //In this combination we have a progress bar, we should use it to print
+        perf.total_ms = loop_start.elapsed().as_millis() as usize;
+        bar.println(format!("{perf}"));
+      }
+      #[cfg(all(feature = "debug", not(feature = "progress")))]
+      {
+        //We do not have a progress bar, so a plain println! will have to do
+        println!("{perf}");
+      }
+
+      //(v) Update progressbar and plot stuff
+      #[cfg(feature = "progress")]
+      {
+        bar.inc(1);
+      }
+    });
+
+    //Return transform of image
+    return output;
+  }
+
+  fn transform_to_list(
     &self,
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
@@ -1211,6 +1588,152 @@ impl Watershed for SegmentingWatershed {
 
         //(vi) Yield a (colour, lakesizes) pair
         (water_level, lake_sizes)
+      })
+      .collect()
+  }
+
+  fn transform_history(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, nd::Array2<usize>)> {
+    //(1) make an image for holding the different water colours
+    let shape = [input.shape()[0], input.shape()[1]];
+    let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(2) set "colours" for each of the starting points
+    // The colours should range from 1 to seeds.len(), but which seed gets which
+    // colour should be random, so we shuffle the vec.
+    // One important excpetion is the zeroth element. It should be set to zero
+    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
+    colours.shuffle(&mut rand::thread_rng());
+
+    //Colour the starting pixels
+    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
+      output[idx] = col;
+    }
+    //Set the zeroth colour to UNCOLOURED!
+    colours.insert(UNCOLOURED, UNCOLOURED);
+
+    #[cfg(feature = "debug")]
+    println!("starting with {} lakes", colours.len());
+
+    //(3) set-up progress bar
+    #[cfg(feature = "progress")]
+    let bar = set_up_bar(self.max_water_level);
+
+    //(4) count lakes for all water levels
+    (0..self.max_water_level)
+      .into_iter()
+      .map(|water_level| {
+        //(logging) make a new perfreport
+        #[cfg(feature = "debug")]
+        let mut perf = crate::performance_monitoring::PerfReport::default();
+        #[cfg(feature = "debug")]
+        let loop_start = std::time::Instant::now();
+
+        /*(i) Colour all flooded pixels connected to a source
+          We have to loop multiple times because there may be plateau's. These
+          require us to colour more than just one neighbouring pixel -> we need
+          to loop until there are no more uncoloured, flooded pixels connected to
+          a source left.
+        */
+        'colouring_loop: loop {
+          #[cfg(feature = "progress")]
+          {
+            bar.tick(); //Tick the progressbar
+          }
+          #[cfg(feature = "debug")]
+          {
+            perf.loops += 1;
+          }
+
+          #[cfg(feature = "debug")]
+          let iter_start = std::time::Instant::now();
+
+          /*(A) Find pixels to colour this iteration
+            We first look for all pixels that are uncoloured, flooded and directly
+            attached to a coloured pixel. We do this in parallel. We cannot, however,
+            change the pixel colours *and* look for pixels to colour at the same time.
+            That is why we collect all pixels to colour in a vector, and later update
+            the map.
+          */
+          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+
+          #[cfg(feature = "debug")]
+          perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
+
+          /*(B) Colour pixels that we found in step (A)
+            If there are no pixels to be coloured anymore, we can break from this
+            loop and raise the water level
+          */
+          if pix_to_colour.is_empty() {
+            //No more connected, flooded pixels left -> raise water level
+            break 'colouring_loop;
+          } else {
+            /*We have pixels to colour
+              I have to discuss safety for a moment. Since we iterated over all
+              pixels and only allowed a pixel to set its own colour, we know that
+              there is at most one colour instruction per pixel. Since the pixels
+              do not overlap in memory, we can safely access each pixel concurrently.
+              To do this, I temporarily put the output watershed canvas in a global
+              static variable that can be accessed from any thread.
+            */
+            #[cfg(feature = "debug")]
+            let colour_start = std::time::Instant::now();
+
+            pix_to_colour.into_iter().for_each(|(idx, col)| {
+              output[idx] = col;
+            });
+
+            #[cfg(feature = "debug")]
+            perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
+          }
+        }
+
+        /* (ii) ¡DO NOT! Merge all touching regions
+          This is the main difference between the two algo's
+        */
+        #[cfg(feature = "debug")]
+        {
+          perf.merge_ms = 0; //by definition, since we're skipping this step
+        }
+
+        //(ii) DO NOT Count the number and size of lakes
+
+        //(iii) Plot current state of the watershed transform
+        #[cfg(feature = "plots")]
+        if let Some(ref path) = self.plot_path {
+          if let Err(err) = plotting::plot_slice(
+            output.view(),
+            &path.join(&format!("ws_lvl{water_level}.png")),
+            self.plot_colour_map,
+          ) {
+            println!("Could not make watershed plot. Error: {err}")
+          }
+        }
+
+        //(iv) print performance report
+        #[cfg(all(feature = "debug", feature = "progress"))]
+        {
+          //In this combination we have a progress bar, we should use it to print
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
+          bar.println(format!("{perf}"));
+        }
+        #[cfg(all(feature = "debug", not(feature = "progress")))]
+        {
+          //We do not have a progress bar, so a plain println! will have to do
+          println!("{perf}");
+        }
+
+        //(v) Update progressbar and plot stuff
+        #[cfg(feature = "progress")]
+        {
+          bar.inc(1);
+        }
+
+        //(vi) Yield a (water_level, image) pair
+        (water_level, output.clone())
       })
       .collect()
   }
