@@ -64,6 +64,7 @@ rand = "0.8"
 
 [dev-dependencies]
 ndarray-rand = "0.14"
+rand = "0.8"
 rustronomy-fits = "0.2"
 
 [package.metadata.cargo-all-features]
