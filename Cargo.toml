@@ -34,7 +34,7 @@ keywords = ["astronomy", "astrophysics", "rustronomy", "image-processing", "wate
 categories = ["science", "algorithms"]
 
 [features]
-default = []
+default = ["jemalloc", "plots", "debug"]
 jemalloc = ["dep:jemallocator"]
 plots = ["dep:plotters"]
 progress = ["dep:indicatif"]
