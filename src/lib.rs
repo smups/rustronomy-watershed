@@ -385,13 +385,16 @@ fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
     connected_mergers.push(new_region);
     connected_mergers = connected_mergers
       .into_iter()
-      .filter_map(|region| if region.is_empty() { None } else { Some(region) })
+      .filter(|region| !region.is_empty())
       .collect();
   }
 
   for merge in connected_mergers {
     let merged_col = *merge.get(0).expect("tried to merge zero regions");
-    merge.into_iter().for_each(|original| base_map[original] = merged_col)
+    base_map
+      .iter_mut()
+      .filter(|x| merge.contains(x))
+      .for_each(|x| *x = merged_col);
   }
 }
 
