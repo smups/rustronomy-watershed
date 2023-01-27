@@ -293,7 +293,27 @@ fn test_find_px() {
   }
 }
 
-fn find_merge(col: nd::ArrayView2<usize>) -> Vec<[usize; 2]> {
+#[derive(Eq, PartialOrd, Ord, Clone, Copy, Default, Debug)]
+#[repr(transparent)]
+struct Merge([usize; 2]);
+
+// Merging 1 with 2 is the same as merging 2 with 1. So [1,2] == [2,1],
+// as reflected by this impl
+impl PartialEq for Merge {
+  #[inline(always)]
+  fn eq(&self, other: &Self) -> bool {
+    let [x1, y1] = self.0;
+    let [x2, y2] = other.0;
+    (x1 == x2 && y1 == y2) || (x1 == y2 && y1 == x2)
+  }
+}
+
+impl From<[usize; 2]> for Merge {
+  #[inline(always)]
+  fn from(value: [usize; 2]) -> Self { Self(value) }
+}
+
+fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
   //Window size and index of center window pixel
   const WINDOW: (usize, usize) = (3, 3);
   const MID: (usize, usize) = (1, 1);
@@ -311,7 +331,7 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<[usize; 2]> {
       4. All neighbours that are left are now different colours than the MID px
         AND are not uncoloured. These pairs have to be merged 
   */
-  nd::Zip::from(col.windows(WINDOW))
+  let mut merge = nd::Zip::from(col.windows(WINDOW))
     .into_par_iter()
     //(1) Check target pixel colour
     .filter(|&col_wd| col_wd.0[MID] != UNCOLOURED)
@@ -331,16 +351,21 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<[usize; 2]> {
     .filter(|(own_col, neigh_col)| !neigh_col.iter().all(|&col| col == *own_col))
     //(4) Collect neighbour colours. These have to be merged
     .map(|(own_col, neigh_col)| {
-      neigh_col.into_iter().map(|c| [own_col, c]).collect::<Vec<_>>()
+      neigh_col.into_iter().map(|c| Merge::from([own_col, c])).collect::<Vec<_>>()
     })
     .flatten()
-    .collect()
+    .collect::<Vec<_>>();
+  //Remove duplicates (unstable sort may reorder duplicates, we don't care
+  //because the whole point of sorting the vec is to get RID of duplicates!)
+  merge.par_sort_unstable();
+  merge.dedup();
+  return merge;
 }
 
-fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
+fn make_colour_map(base_map: &mut [usize], local_mergers: &[Merge]) {
   /* REDUCING 2-REGION MERGERS TO N-REGION MERGERS
     We are given a list of *locally* connected regions. For instance:
-      (1,2,3) and (2,4,5)
+      (1,2) and (2,4)
     We have to turn locally connected regions into globally connected regions.
     In the example, the two locally connected regions are not connected directly,
     but only via region 2. They still have to merge into a single region:
@@ -354,7 +379,8 @@ fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
   let mut connected_mergers: Vec<Vec<usize>> = Vec::new();
 
   for mut local_merge in local_mergers {
-    //Find all the regions this merger is connected to
+    //Find all the current items in `connected_mergers` that `local_merge` is
+    //connected to
     let connected: Vec<_> = connected_mergers
       .iter()
       .enumerate()
