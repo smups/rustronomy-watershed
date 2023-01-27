@@ -398,6 +398,36 @@ fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
   }
 }
 
+#[test]
+fn test_make_colour_map() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let mut cmap;
+  
+  //Test merging of once-connected region
+  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  make_colour_map(&mut cmap, vec![vec![1,2]]);
+  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
+  
+  //Now test multiple non-connected regions
+  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  make_colour_map(&mut cmap, vec![vec![1,2], vec![8,9]]);
+  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
+
+  //Now test multiple *connected* regions
+  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  make_colour_map(&mut cmap, vec![vec![1,2], vec![2,3]]);
+  assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
+
+  //Two consecutive mergers
+  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  make_colour_map(&mut cmap, vec![vec![1,2], vec![8,9]]);
+  dbg!(&cmap);
+  make_colour_map(&mut cmap, vec![vec![1,7], vec![7,8]]);
+  dbg!(&cmap);
+  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                             OPTIONAL MODULES                               //
 ////////////////////////////////////////////////////////////////////////////////
