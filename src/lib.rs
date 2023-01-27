@@ -70,6 +70,7 @@
 //! new watershed transform, one can use the `TransformBuilder` struct which is
 //! included in the `rustronomy_watershed` prelude.
 //! ```rust
+//! use ndarray as nd;
 //! use rustronomy_watershed::prelude::*;
 //! use ndarray_rand::{rand_distr::Uniform, RandomExt};
 //!
@@ -80,7 +81,7 @@
 //! //Find minima of the random field (to be used as seeds)
 //! let rf_mins = watershed.find_local_minima(rf.view());
 //! //Execute the watershed transform
-//! let output = watershed.transform(rf.view(), &rf_mins)
+//! let output = watershed.transform(rf.view(), &rf_mins);
 //! ```
 //! [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
 //!
@@ -826,7 +827,7 @@ pub trait WatershedUtils {
   ///     .unwrap();
   /// 
   /// //Run pre-processor (using turbofish syntax)
-  /// let rf = watershed.pre_processor_with_max::<MYMAX, _, _>(rf.view());
+  /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
   /// 
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
