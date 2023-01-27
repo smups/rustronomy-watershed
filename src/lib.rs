@@ -259,6 +259,39 @@ fn find_px(
     .collect()
 }
 
+#[test]
+fn test_find_px() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 5, 0, 0],
+    [0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 5, 0, 0, 1, 0],
+    [0, 0, 5, 4, 5, 0, 0, 0],
+    [0, 0, 0, 5, 0, 0, 0, 0],
+  ];
+  let colours = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 0, 1, 1, 1, 1, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 0, 0, 1, 0],
+    [0, 1, 1, 0, 1, 1, 0, 0],
+    [0, 1, 0, 0, 0, 1, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0]
+  ];
+  let answer1 = [(1,5), (2,2), (4,4), (5,6)];
+  let attempt1 = find_px(input.view(), colours.view(), 2)
+    .into_iter().map(|(x, _)| x)
+    .collect::<Vec<_>>();
+  for answer in answer1 {
+    assert!(attempt1.contains(&answer))
+  }
+}
+
 fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
   //Window size and index of center window pixel
   const WINDOW: (usize, usize) = (3, 3);
