@@ -197,7 +197,7 @@ fn recolour(canvas: nd::ArrayViewMut2<usize>, colour_map: Vec<usize>) {
   canvas.into_par_iter().for_each(|col| *col = *colour_map.get(*col).unwrap())
 }
 
-fn find_px(
+fn find_flooded_px(
   img: nd::ArrayView2<u8>,
   cols: nd::ArrayView2<usize>,
   lvl: u8,
@@ -285,7 +285,7 @@ fn test_find_px() {
     [0, 0, 0, 0, 0, 0, 0, 0]
   ];
   let answer1 = [(1,5), (2,2), (4,4), (5,6)];
-  let attempt1 = find_px(input.view(), colours.view(), 2)
+  let attempt1 = find_flooded_px(input.view(), colours.view(), 2)
     .into_iter().map(|(x, _)| x)
     .collect::<Vec<_>>();
   for answer in answer1 {
@@ -293,7 +293,7 @@ fn test_find_px() {
   }
 }
 
-fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
+fn find_merge(col: nd::ArrayView2<usize>) -> Vec<[usize; 2]> {
   //Window size and index of center window pixel
   const WINDOW: (usize, usize) = (3, 3);
   const MID: (usize, usize) = (1, 1);
@@ -309,14 +309,13 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
       3. Check if the pixel has neighbours of different colours
         YES -> continue, NO -> ignore (this is a lake pixel)
       4. All neighbours that are left are now different colours than the MID px
-        AND are not uncoloured. The de-duplicated list of their colours is the
-        list of colours that have to be merged
+        AND are not uncoloured. These pairs have to be merged 
   */
   nd::Zip::from(col.windows(WINDOW))
     .into_par_iter()
-    //(1) Check pixel colour
+    //(1) Check target pixel colour
     .filter(|&col_wd| col_wd.0[MID] != UNCOLOURED)
-    //Map iterator to array of neighbour colours
+    //Map window to array of neighbour colours
     .map(|col_wd| -> (usize, Vec<usize>) {
       let own_col = col_wd.0[MID];
       let neighbour_cols = neighbours_4con(&MID)
@@ -331,12 +330,10 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
     //(3) Ignore pixels with neighbours that all have the same colour
     .filter(|(own_col, neigh_col)| !neigh_col.iter().all(|&col| col == *own_col))
     //(4) Collect neighbour colours. These have to be merged
-    .map(|(own_col, mut neigh_col)| {
-      neigh_col.push(own_col); //add own colour to merge list
-      neigh_col.sort(); //sort for dedup func
-      neigh_col.dedup(); //remove duplicates
-      neigh_col
+    .map(|(own_col, neigh_col)| {
+      neigh_col.into_iter().map(|c| [own_col, c]).collect::<Vec<_>>()
     })
+    .flatten()
     .collect()
 }
 
@@ -1065,7 +1062,7 @@ impl Watershed for MergingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1264,7 +1261,7 @@ impl Watershed for MergingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1480,7 +1477,7 @@ impl Watershed for SegmentingWatershed {
           That is why we collect all pixels to colour in a vector, and later update
           the map.
         */
-        let pix_to_colour = find_px(input.view(), output.view(), water_level);
+        let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
         #[cfg(feature = "debug")]
         perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1625,7 +1622,7 @@ impl Watershed for SegmentingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1784,7 +1781,7 @@ impl Watershed for SegmentingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
