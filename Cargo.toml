@@ -19,7 +19,7 @@
 
 [package]
 name = "rustronomy-watershed"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 readme = "./README.md"
 license = "EUPL-1.2"
@@ -34,7 +34,7 @@ keywords = ["astronomy", "astrophysics", "rustronomy", "image-processing", "wate
 categories = ["science", "algorithms"]
 
 [features]
-default = ["jemalloc", "plots", "debug", "progress"]
+default = []
 jemalloc = ["dep:jemallocator"]
 plots = ["dep:plotters"]
 progress = ["dep:indicatif"]
