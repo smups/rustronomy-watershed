@@ -1256,14 +1256,7 @@ impl Watershed for MergingWatershed {
             //No more connected, flooded pixels left -> raise water level
             break 'colouring_loop;
           } else {
-            /*We have pixels to colour
-              I have to discuss safety for a moment. Since we iterated over all
-              pixels and only allowed a pixel to set its own colour, we know that
-              there is at most one colour instruction per pixel. Since the pixels
-              do not overlap in memory, we can safely access each pixel concurrently.
-              To do this, I temporarily put the output watershed canvas in a global
-              static variable that can be accessed from any thread.
-            */
+            //We have pixels to colour
             #[cfg(feature = "debug")]
             let colour_start = std::time::Instant::now();
 
