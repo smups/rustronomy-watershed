@@ -446,12 +446,16 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
     })
     .flatten()
     .collect::<Vec<_>>();
+
+  println!("{}", merge.len());
   //Remove duplicates (unstable sort may reorder duplicates, we don't care
   //because the whole point of sorting the vec is to get RID of duplicates!)
   merge.par_sort_unstable_by(sort_by_big_small);
   merge.dedup();
   merge.par_sort_unstable_by(sort_by_small_big);
   merge.dedup();
+
+  println!("{}", merge.len());
   return merge;
 }
 
@@ -491,13 +495,17 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
   */
   let mut full_mergers: Vec<Vec<usize>> = Vec::new();
 
-  for &pair_merge in pair_mergers {
+  'pair_loop: for &pair_merge in pair_mergers {
     //If pair_merge connects two full_merge regions, they have to be merged into
     //a single large region
     let [col1, col2]: [usize; 2] = pair_merge.into();
     let mut connect = [None, None];
     for (idx, region) in full_mergers.iter().enumerate() {
-      if region.contains(&col1) || region.contains(&col2) {
+      if region.contains(&col1) && region.contains(&col2) {
+        //This pair_merge was entirely contained within another region, it must
+        //be a duplicate! We can skip to the next pair_merge
+        continue 'pair_loop;
+      } else if region.contains(&col1) || region.contains(&col2) {
         if connect[0].is_none() {
           connect[0] = Some(idx)
         } else if connect[1].is_none() {
@@ -559,27 +567,44 @@ fn test_make_colour_map() {
   //This test assumes UNCOLOURED == 0, so it should fail
   assert!(UNCOLOURED == 0);
   let mut cmap;
-  
-  //Test merging of once-connected region
-  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, &vec![Merge([1,2])]);
-  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
-  
-  //Now test multiple non-connected regions
-  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([8,9])]);
-  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
+  let rng = &mut rand::thread_rng();
+  for _ in 0..10 {
+    //Test merging of once-connected region
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    make_colour_map(&mut cmap, &vec![Merge([1,2])]);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
+    
+    //Now test multiple non-connected regions
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
 
-  //Now test multiple *connected* regions
-  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([2,3])]);
-  assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
+    //Now test multiple *connected* regions
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([2,3])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
 
-  //Two consecutive mergers
-  cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([8,9])]);
-  make_colour_map(&mut cmap, &vec![Merge([1,7]), Merge([7,8])]);
-  assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
+    //Two consecutive mergers
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    let mut input = vec![Merge([1,7]), Merge([7,8])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
+
+    //Repeated merger (somehow)
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([3,2]), Merge([2,1])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
