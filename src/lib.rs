@@ -192,11 +192,6 @@ fn neighbours_4con(index: &(usize, usize)) -> Vec<(usize, usize)> {
     .collect()
 }
 
-#[inline(always)]
-fn recolour(canvas: nd::ArrayViewMut2<usize>, colour_map: Vec<usize>) {
-  canvas.into_par_iter().for_each(|col| *col = *colour_map.get(*col).unwrap())
-}
-
 fn find_flooded_px(
   img: nd::ArrayView2<u8>,
   cols: nd::ArrayView2<usize>,
@@ -605,6 +600,45 @@ fn test_make_colour_map() {
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
   }
+}
+
+#[inline(always)]
+fn recolour(mut canvas: nd::ArrayViewMut2<usize>, colour_map: &[usize]) {
+  canvas.mapv_inplace(|px| colour_map[px])
+}
+
+#[test]
+fn test_recolour() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let mut input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 3, 3, 3, 3, 3, 3, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 6, 0],
+    [0, 4, 4, 0, 0, 5, 6, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  let cmap = [0, 1, 1, 1, 4, 5, 5];
+  let answer = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 1, 1, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 5, 0],
+    [0, 4, 4, 0, 0, 5, 5, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  recolour(input.view_mut(), &cmap);
+  assert_eq!(answer, input);
+
+  //Test that changing values no longer in the image does nothing
+  let cmap = [0, 1, 13498683, 13458, 4, 5, 134707134];
+  recolour(input.view_mut(), &cmap);
+  assert_eq!(answer, input);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1289,13 +1323,12 @@ impl Watershed for MergingWatershed {
 
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
-        let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, &to_merge);
-        assert!(colour_map[UNCOLOURED] == UNCOLOURED);
+        make_colour_map(&mut colours, &to_merge);
+        assert!(colours[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
         if num_mergers > 0 {
-          recolour(output.view_mut(), colour_map);
+          recolour(output.view_mut(), &colours);
         }
         #[cfg(feature = "debug")]
         {
@@ -1488,13 +1521,12 @@ impl Watershed for MergingWatershed {
 
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
-        let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, &to_merge);
-        assert!(colour_map[UNCOLOURED] == UNCOLOURED);
+        make_colour_map(&mut colours, &to_merge);
+        assert!(colours[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
         if num_mergers > 0 {
-          recolour(output.view_mut(), colour_map);
+          recolour(output.view_mut(), &colours);
         }
         #[cfg(feature = "debug")]
         {
