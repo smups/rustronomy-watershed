@@ -308,6 +308,11 @@ impl PartialEq for Merge {
   }
 }
 
+#[test]
+fn test_merge_eq() {
+  assert_eq!(Merge([1,2]), Merge([2,1]));
+}
+
 #[inline(always)]
 fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   use std::cmp::Ordering::*;
