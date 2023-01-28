@@ -70,6 +70,7 @@
 //! new watershed transform, one can use the `TransformBuilder` struct which is
 //! included in the `rustronomy_watershed` prelude.
 //! ```rust
+//! use ndarray as nd;
 //! use rustronomy_watershed::prelude::*;
 //! use ndarray_rand::{rand_distr::Uniform, RandomExt};
 //!
@@ -80,7 +81,7 @@
 //! //Find minima of the random field (to be used as seeds)
 //! let rf_mins = watershed.find_local_minima(rf.view());
 //! //Execute the watershed transform
-//! let output = watershed.transform(rf.view(), &rf_mins)
+//! let output = watershed.transform(rf.view(), &rf_mins);
 //! ```
 //! [^1]: H. Digabel and C. Lantuéjoul. **Iterative algorithms.** *In Actes du Second Symposium Européen d’Analyse Quantitative des Microstructures en Sciences des Matériaux, Biologie et Medécine*, October 1978.
 //!
@@ -191,12 +192,7 @@ fn neighbours_4con(index: &(usize, usize)) -> Vec<(usize, usize)> {
     .collect()
 }
 
-#[inline(always)]
-fn recolour(canvas: nd::ArrayViewMut2<usize>, colour_map: Vec<usize>) {
-  canvas.into_par_iter().for_each(|col| *col = *colour_map.get(*col).unwrap())
-}
-
-fn find_px(
+fn find_flooded_px(
   img: nd::ArrayView2<u8>,
   cols: nd::ArrayView2<usize>,
   lvl: u8,
@@ -259,7 +255,148 @@ fn find_px(
     .collect()
 }
 
-fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
+#[test]
+fn test_find_px() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 0, 1, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 5, 0, 0],
+    [0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 5, 0, 0, 1, 0],
+    [0, 0, 5, 4, 5, 0, 0, 0],
+    [0, 0, 0, 5, 0, 0, 0, 0],
+  ];
+  let colours = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 0, 1, 1, 1, 1, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 0, 0, 1, 0],
+    [0, 1, 1, 0, 1, 1, 0, 0],
+    [0, 1, 0, 0, 0, 1, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0]
+  ];
+  let answer1 = [(1,5), (2,2), (4,4), (5,6)];
+  let attempt1 = find_flooded_px(input.view(), colours.view(), 2)
+    .into_iter().map(|(x, _)| x)
+    .collect::<Vec<_>>();
+  for answer in answer1 {
+    assert!(attempt1.contains(&answer))
+  }
+}
+
+#[derive(Eq, Clone, Copy, Default, Debug)]
+#[repr(transparent)]
+struct Merge([usize; 2]);
+
+// Merging 1 with 2 is the same as merging 2 with 1. So [1,2] == [2,1],
+// as reflected by this impl
+impl PartialEq for Merge {
+  #[inline(always)]
+  fn eq(&self, other: &Self) -> bool {
+    let [x1, y1] = self.0;
+    let [x2, y2] = other.0;
+    (x1 == x2 && y1 == y2) || (x1 == y2 && y1 == x2)
+  }
+}
+
+#[test]
+fn test_merge_eq() {
+  assert_eq!(Merge([1,2]), Merge([2,1]));
+}
+
+#[inline(always)]
+fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
+  use std::cmp::Ordering::*;
+  if this == that {
+    return Equal;
+  }
+  let (self_small, self_big) = if this.0[0] > this.0[1] {
+    (this.0[0], this.0[1])
+  } else {
+    (this.0[0], this.0[1])
+  };
+  let (other_small, other_big) = if that.0[0] > that.0[1] {
+    (that.0[0], that.0[1])
+  } else {
+    (that.0[1], that.0[0])
+  };
+  
+  //First order on the basis of the smallest elements, then the largest ones
+  if self_small < other_small {
+    Less
+  } else if self_small > other_small {
+    Greater
+  } else if self_big < other_big {
+    Less
+  } else {
+    Greater
+  }
+}
+
+#[test]
+fn test_merge_ord_small_big() {
+  use std::cmp::Ordering::*;
+  let cmp = sort_by_small_big;
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Less);
+}
+
+#[inline(always)]
+fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
+  use std::cmp::Ordering::*;
+  if this == that {
+    return Equal;
+  }
+  let (self_small, self_big) = if this.0[0] > this.0[1] {
+    (this.0[0], this.0[1])
+  } else {
+    (this.0[0], this.0[1])
+  };
+  let (other_small, other_big) = if that.0[0] > that.0[1] {
+    (that.0[0], that.0[1])
+  } else {
+    (that.0[1], that.0[0])
+  };
+  
+  //First order on the basis of the smallest elements, then the largest ones
+  if self_big < other_big {
+    Less
+  } else if self_big > other_big {
+    Greater
+  } else if self_small < other_small {
+    Less
+  } else {
+    Greater
+  }
+}
+
+#[test]
+fn test_merge_ord_big_small() {
+  use std::cmp::Ordering::*;
+  let cmp = sort_by_big_small;
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Greater);
+}
+
+impl From<[usize; 2]> for Merge {
+  #[inline(always)]
+  fn from(value: [usize; 2]) -> Self { Self(value) }
+}
+
+impl From<Merge> for [usize; 2] {
+  #[inline(always)]
+  fn from(value: Merge) -> Self { value.0 }
+}
+
+fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
   //Window size and index of center window pixel
   const WINDOW: (usize, usize) = (3, 3);
   const MID: (usize, usize) = (1, 1);
@@ -275,14 +412,13 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
       3. Check if the pixel has neighbours of different colours
         YES -> continue, NO -> ignore (this is a lake pixel)
       4. All neighbours that are left are now different colours than the MID px
-        AND are not uncoloured. The de-duplicated list of their colours is the
-        list of colours that have to be merged
+        AND are not uncoloured. These pairs have to be merged 
   */
-  nd::Zip::from(col.windows(WINDOW))
+  let mut merge = nd::Zip::from(col.windows(WINDOW))
     .into_par_iter()
-    //(1) Check pixel colour
+    //(1) Check target pixel colour
     .filter(|&col_wd| col_wd.0[MID] != UNCOLOURED)
-    //Map iterator to array of neighbour colours
+    //Map window to array of neighbour colours
     .map(|col_wd| -> (usize, Vec<usize>) {
       let own_col = col_wd.0[MID];
       let neighbour_cols = neighbours_4con(&MID)
@@ -294,22 +430,54 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Vec<usize>> {
     })
     //(2) Ignore pixels with only uncoloured neighbours
     .filter(|(_own_col, neigh_col)| !neigh_col.is_empty())
-    //(3) Ignore pixels with neighbours that all have the same colour
-    .filter(|(own_col, neigh_col)| !neigh_col.iter().all(|&col| col == *own_col))
-    //(4) Collect neighbour colours. These have to be merged
-    .map(|(own_col, mut neigh_col)| {
-      neigh_col.push(own_col); //add own colour to merge list
-      neigh_col.sort(); //sort for dedup func
-      neigh_col.dedup(); //remove duplicates
+    //(3) Collect neighbour colours. These have to be merged
+    .map(|(own_col, neigh_col)| {
       neigh_col
+        .into_iter()
+        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes) 
+        .filter_map(|c| if c == own_col { None } else {
+          Some(Merge::from([own_col, c]))
+        }).collect::<Vec<_>>()
     })
-    .collect()
+    .flatten()
+    .collect::<Vec<_>>();
+
+  println!("{}", merge.len());
+  //Remove duplicates (unstable sort may reorder duplicates, we don't care
+  //because the whole point of sorting the vec is to get RID of duplicates!)
+  merge.par_sort_unstable_by(sort_by_big_small);
+  merge.dedup();
+  merge.par_sort_unstable_by(sort_by_small_big);
+  merge.dedup();
+
+  println!("{}", merge.len());
+  return merge;
 }
 
-fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
+#[test]
+fn test_find_merge() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 3, 3, 3, 3, 3, 3, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 6, 0],
+    [0, 4, 4, 0, 0, 5, 6, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  let answer = vec![Merge([1,2]), Merge([1,3]), Merge([2,3]), Merge([5,6])];
+  let result = find_merge(input.view());
+  assert_eq!(answer.len(), result.len());
+  assert!(result.iter().all(|x| answer.contains(x)));
+}
+
+fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
   /* REDUCING 2-REGION MERGERS TO N-REGION MERGERS
     We are given a list of *locally* connected regions. For instance:
-      (1,2,3) and (2,4,5)
+      (1,2) and (2,4)
     We have to turn locally connected regions into globally connected regions.
     In the example, the two locally connected regions are not connected directly,
     but only via region 2. They still have to merge into a single region:
@@ -320,46 +488,157 @@ fn make_colour_map(base_map: &mut [usize], local_mergers: Vec<Vec<usize>>) {
       (1,2,3,4,5)
     regardless of the order in which they were specified!
   */
-  let mut connected_mergers: Vec<Vec<usize>> = Vec::new();
+  let mut full_mergers: Vec<Vec<usize>> = Vec::new();
 
-  for mut local_merge in local_mergers {
-    //Find all the regions this merger is connected to
-    let connected: Vec<_> = connected_mergers
-      .iter()
-      .enumerate()
-      .filter_map(|(idx, connected_region)| {
-        //If the connected region contains *any* colour that the local merger also
-        //contains, it is connected to the local region
-        if local_merge.iter().any(|col| connected_region.contains(col)) {
-          Some(idx)
+  'pair_loop: for &pair_merge in pair_mergers {
+    //If pair_merge connects two full_merge regions, they have to be merged into
+    //a single large region
+    let [col1, col2]: [usize; 2] = pair_merge.into();
+    let mut connect = [None, None];
+    for (idx, region) in full_mergers.iter().enumerate() {
+      if region.contains(&col1) && region.contains(&col2) {
+        //This pair_merge was entirely contained within another region, it must
+        //be a duplicate! We can skip to the next pair_merge
+        continue 'pair_loop;
+      } else if region.contains(&col1) || region.contains(&col2) {
+        if connect[0].is_none() {
+          connect[0] = Some(idx)
+        } else if connect[1].is_none() {
+          connect[1] = Some(idx);
+          break;
         } else {
-          None
+          panic!("Unreachable code path!")
         }
-      })
-      .collect();
-    //We merge all newly connected regions + the colours from the local merger
-    let mut new_region = Vec::new();
-    connected.into_iter().for_each(|idx|
-        //This will leave some regions in `connected_mergers` empty
-        new_region.append(connected_mergers.get_mut(idx).unwrap()));
-    new_region.append(&mut local_merge);
+      }
+    }
+    
+    if connect == [None, None] {
+      //This pair_merge does not connect two full_merge regions, so it must be added
+      //as its own full_merge region
+      full_mergers.push(vec![col1, col2]);
+    } else if let [Some(reg_idx), None] = connect {
+      //This pair_merge *does* connect with another region, but only one.
+      let reg = full_mergers.get_mut(reg_idx).unwrap();
+      reg.extend_from_slice(&[col1, col2]);
+      reg.sort();
+      reg.dedup();
+    } else if let [Some(reg_idx1), Some(reg_idx2)] = connect {
+      //This pair_merge connects two regions, we must merge pair_merge AND both
+      //regions at the same time.
 
-    //Remove duplicate colours
-    new_region.sort();
-    new_region.dedup();
+      //Obtain a mutable ref to both regions (we'll drain one of them)
+      //This code is messy thanks to the borrow checker
+      let (reg1, reg2) = {
+        let (larger, smaller) = if reg_idx1 > reg_idx2 {
+          (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
+        let (head, tail) = full_mergers.split_at_mut(smaller + 1);
+        (&mut head[smaller], &mut tail[larger - smaller - 1])
+      };
 
-    //remove empty regions and append our new one
-    connected_mergers.push(new_region);
-    connected_mergers = connected_mergers
+      //Drain region2 into region 1.
+      //We do not have to append col1 or col2 because they are already contained
+      //in reg1 and reg2. That is why we are merging them after all.
+      reg1.append(reg2);
+    }
+
+    //remove empty regions
+    full_mergers = full_mergers
       .into_iter()
-      .filter_map(|region| if region.is_empty() { None } else { Some(region) })
+      .filter(|region| !region.is_empty())
       .collect();
   }
 
-  for merge in connected_mergers {
+  for merge in full_mergers {
     let merged_col = *merge.get(0).expect("tried to merge zero regions");
-    merge.into_iter().for_each(|original| base_map[original] = merged_col)
+    base_map
+      .iter_mut()
+      .filter(|x| merge.contains(x))
+      .for_each(|x| *x = merged_col);
   }
+}
+
+#[test]
+fn test_make_colour_map() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let mut cmap;
+  let rng = &mut rand::thread_rng();
+  for _ in 0..10 {
+    //Test merging of once-connected region
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    make_colour_map(&mut cmap, &vec![Merge([1,2])]);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
+    
+    //Now test multiple non-connected regions
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
+
+    //Now test multiple *connected* regions
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([2,3])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
+
+    //Two consecutive mergers
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    let mut input = vec![Merge([1,7]), Merge([7,8])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
+
+    //Repeated merger (somehow)
+    cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let mut input = vec![Merge([1,2]), Merge([3,2]), Merge([2,1])];
+    input.shuffle(rng);
+    make_colour_map(&mut cmap, &input);
+    assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
+  }
+}
+
+#[inline(always)]
+fn recolour(mut canvas: nd::ArrayViewMut2<usize>, colour_map: &[usize]) {
+  canvas.mapv_inplace(|px| colour_map[px])
+}
+
+#[test]
+fn test_recolour() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let mut input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 3, 3, 3, 3, 3, 3, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 6, 0],
+    [0, 4, 4, 0, 0, 5, 6, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  let cmap = [0, 1, 1, 1, 4, 5, 5];
+  let answer = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 1, 0, 1, 0],
+    [0, 1, 1, 1, 1, 1, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 5, 0],
+    [0, 4, 4, 0, 0, 5, 5, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  recolour(input.view_mut(), &cmap);
+  assert_eq!(answer, input);
+
+  //Test that changing values no longer in the image does nothing
+  let cmap = [0, 1, 13498683, 13458, 4, 5, 134707134];
+  recolour(input.view_mut(), &cmap);
+  assert_eq!(answer, input);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -760,7 +1039,7 @@ pub trait WatershedUtils {
   ///     .unwrap();
   /// 
   /// //Run pre-processor (using turbofish syntax)
-  /// let rf = watershed.pre_processor_with_max::<MYMAX, _, _>(rf.view());
+  /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
   /// 
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
@@ -942,11 +1221,8 @@ impl Watershed for MergingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -998,7 +1274,7 @@ impl Watershed for MergingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1011,14 +1287,7 @@ impl Watershed for MergingWatershed {
             //No more connected, flooded pixels left -> raise water level
             break 'colouring_loop;
           } else {
-            /*We have pixels to colour
-              I have to discuss safety for a moment. Since we iterated over all
-              pixels and only allowed a pixel to set its own colour, we know that
-              there is at most one colour instruction per pixel. Since the pixels
-              do not overlap in memory, we can safely access each pixel concurrently.
-              To do this, I temporarily put the output watershed canvas in a global
-              static variable that can be accessed from any thread.
-            */
+            //We have pixels to colour
             #[cfg(feature = "debug")]
             let colour_start = std::time::Instant::now();
 
@@ -1051,13 +1320,12 @@ impl Watershed for MergingWatershed {
 
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
-        let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, to_merge);
-        assert!(colour_map[UNCOLOURED] == UNCOLOURED);
+        make_colour_map(&mut colours, &to_merge);
+        assert!(colours[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
         if num_mergers > 0 {
-          recolour(output.view_mut(), colour_map);
+          recolour(output.view_mut(), &colours);
         }
         #[cfg(feature = "debug")]
         {
@@ -1117,7 +1385,7 @@ impl Watershed for MergingWatershed {
       .collect()
   }
 
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+  fn transform(&self, input: nd::ArrayView2<u8>, _seeds: &[(usize, usize)]) -> nd::Array2<usize> {
     //Note: the implementation of `transform` is trivial for the merging transfo
 
     //(1) make an image for holding the different water colours
@@ -1141,11 +1409,8 @@ impl Watershed for MergingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1197,7 +1462,7 @@ impl Watershed for MergingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1250,13 +1515,12 @@ impl Watershed for MergingWatershed {
 
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
-        let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, to_merge);
-        assert!(colour_map[UNCOLOURED] == UNCOLOURED);
+        make_colour_map(&mut colours, &to_merge);
+        assert!(colours[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
         if num_mergers > 0 {
-          recolour(output.view_mut(), colour_map);
+          recolour(output.view_mut(), &colours);
         }
         #[cfg(feature = "debug")]
         {
@@ -1359,11 +1623,8 @@ impl Watershed for SegmentingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1413,7 +1674,7 @@ impl Watershed for SegmentingWatershed {
           That is why we collect all pixels to colour in a vector, and later update
           the map.
         */
-        let pix_to_colour = find_px(input.view(), output.view(), water_level);
+        let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
         #[cfg(feature = "debug")]
         perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1502,11 +1763,8 @@ impl Watershed for SegmentingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1558,7 +1816,7 @@ impl Watershed for SegmentingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
@@ -1717,7 +1975,7 @@ impl Watershed for SegmentingWatershed {
             That is why we collect all pixels to colour in a vector, and later update
             the map.
           */
-          let pix_to_colour = find_px(input.view(), output.view(), water_level);
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
 
           #[cfg(feature = "debug")]
           perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);

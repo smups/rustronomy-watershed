@@ -19,7 +19,7 @@
 
 [package]
 name = "rustronomy-watershed"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 readme = "./README.md"
 license = "EUPL-1.2"
@@ -64,6 +64,7 @@ rand = "0.8"
 
 [dev-dependencies]
 ndarray-rand = "0.14"
+rand = "0.8"
 rustronomy-fits = "0.2"
 
 [package.metadata.cargo-all-features]
