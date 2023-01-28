@@ -371,6 +371,11 @@ impl From<[usize; 2]> for Merge {
   fn from(value: [usize; 2]) -> Self { Self(value) }
 }
 
+impl From<Merge> for [usize; 2] {
+  #[inline(always)]
+  fn from(value: Merge) -> Self { value.0 }
+}
+
 fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
   //Window size and index of center window pixel
   const WINDOW: (usize, usize) = (3, 3);
