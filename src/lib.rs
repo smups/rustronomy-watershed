@@ -337,6 +337,16 @@ fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   }
 }
 
+#[test]
+fn test_merge_ord_small_big() {
+  use std::cmp::Ordering::*;
+  let cmp = sort_by_small_big;
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Less);
+}
+
 #[inline(always)]
 fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   use std::cmp::Ordering::*;
