@@ -578,9 +578,7 @@ fn test_make_colour_map() {
   //Two consecutive mergers
   cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([8,9])]);
-  dbg!(&cmap);
   make_colour_map(&mut cmap, &vec![Merge([1,7]), Merge([7,8])]);
-  dbg!(&cmap);
   assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
 }
 
