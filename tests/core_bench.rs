@@ -23,11 +23,10 @@ use ndarray as nd;
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 use rustronomy_watershed::prelude::*;
 
-#[cfg(all(not(feature = "progress"), feature = "debug"))]
 #[test]
 fn core_bench() {
   //Create a random uniform distribution
-  let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
+  let rf = nd::Array2::<u8>::random((1024, 1024), Uniform::new(0, 254));
 
   //Set-up the watershed transform
   let watershed = TransformBuilder::new_merging().build().unwrap();
@@ -46,7 +45,7 @@ fn core_bench() {
       let pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
       //Time watershed
       let start = std::time::Instant::now();
-      pool.install(|| watershed.transform(rf.view(), &rf_mins));
+      pool.install(|| watershed.transform_to_list(rf.view(), &rf_mins));
       start.elapsed().as_secs_f64()
     })
     .collect();
