@@ -31,11 +31,11 @@ below](#cargo-feature-gates).
 To use the latest release of Rustronomy-watershed in a cargo project, add the rustronomy-watershed crate as a dependency to your `Cargo.toml` file:
 ```toml
 [dependencies]
-rustronomy-watershed = "0.1.0"
+rustronomy-watershed = "0.3"
 ```
 To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the following code:
 ```rust
-:dep rustronomy-watershed = {version = "0.1"}
+:dep rustronomy-watershed = {version = "0.3"}
 ```
 
 > Please do not use any versions before 0.3, as they contain a major bug in the implementation of the merging watershed algorithm
