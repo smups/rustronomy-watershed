@@ -1355,7 +1355,7 @@ impl Watershed for MergingWatershed {
       .collect()
   }
 
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+  fn transform(&self, input: nd::ArrayView2<u8>, _seeds: &[(usize, usize)]) -> nd::Array2<usize> {
     //Note: the implementation of `transform` is trivial for the merging transfo
 
     //(1) make an image for holding the different water colours
