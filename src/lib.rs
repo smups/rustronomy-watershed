@@ -293,7 +293,7 @@ fn test_find_px() {
   }
 }
 
-#[derive(Eq, PartialOrd, Ord, Clone, Copy, Default, Debug)]
+#[derive(Eq, Clone, Copy, Default, Debug)]
 #[repr(transparent)]
 struct Merge([usize; 2]);
 
@@ -305,6 +305,64 @@ impl PartialEq for Merge {
     let [x1, y1] = self.0;
     let [x2, y2] = other.0;
     (x1 == x2 && y1 == y2) || (x1 == y2 && y1 == x2)
+  }
+}
+
+#[inline(always)]
+fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
+  use std::cmp::Ordering::*;
+  if this == that {
+    return Equal;
+  }
+  let (self_small, self_big) = if this.0[0] > this.0[1] {
+    (this.0[0], this.0[1])
+  } else {
+    (this.0[0], this.0[1])
+  };
+  let (other_small, other_big) = if that.0[0] > that.0[1] {
+    (that.0[0], that.0[1])
+  } else {
+    (that.0[1], that.0[0])
+  };
+  
+  //First order on the basis of the smallest elements, then the largest ones
+  if self_small < other_small {
+    Less
+  } else if self_small > other_small {
+    Greater
+  } else if self_big < other_big {
+    Less
+  } else {
+    Greater
+  }
+}
+
+#[inline(always)]
+fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
+  use std::cmp::Ordering::*;
+  if this == that {
+    return Equal;
+  }
+  let (self_small, self_big) = if this.0[0] > this.0[1] {
+    (this.0[0], this.0[1])
+  } else {
+    (this.0[0], this.0[1])
+  };
+  let (other_small, other_big) = if that.0[0] > that.0[1] {
+    (that.0[0], that.0[1])
+  } else {
+    (that.0[1], that.0[0])
+  };
+  
+  //First order on the basis of the smallest elements, then the largest ones
+  if self_big < other_big {
+    Less
+  } else if self_big > other_big {
+    Greater
+  } else if self_small < other_small {
+    Less
+  } else {
+    Greater
   }
 }
 
@@ -347,22 +405,47 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
     })
     //(2) Ignore pixels with only uncoloured neighbours
     .filter(|(_own_col, neigh_col)| !neigh_col.is_empty())
-    //(3) Ignore pixels with neighbours that all have the same colour
-    .filter(|(own_col, neigh_col)| !neigh_col.iter().all(|&col| col == *own_col))
-    //(4) Collect neighbour colours. These have to be merged
+    //(3) Collect neighbour colours. These have to be merged
     .map(|(own_col, neigh_col)| {
-      neigh_col.into_iter().map(|c| Merge::from([own_col, c])).collect::<Vec<_>>()
+      neigh_col
+        .into_iter()
+        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes) 
+        .filter_map(|c| if c == own_col { None } else {
+          Some(Merge::from([own_col, c]))
+        }).collect::<Vec<_>>()
     })
     .flatten()
     .collect::<Vec<_>>();
   //Remove duplicates (unstable sort may reorder duplicates, we don't care
   //because the whole point of sorting the vec is to get RID of duplicates!)
-  merge.par_sort_unstable();
+  merge.par_sort_unstable_by(sort_by_big_small);
+  merge.dedup();
+  merge.par_sort_unstable_by(sort_by_small_big);
   merge.dedup();
   return merge;
 }
 
-fn make_colour_map(base_map: &mut [usize], local_mergers: &[Merge]) {
+#[test]
+fn test_find_merge() {
+  //This test assumes UNCOLOURED == 0, so it should fail
+  assert!(UNCOLOURED == 0);
+  let input = nd::array![
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 1, 1, 2, 2, 0, 1, 0],
+    [0, 3, 3, 3, 3, 3, 3, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 4, 4, 0, 5, 5, 6, 0],
+    [0, 4, 4, 0, 0, 5, 6, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  let answer = vec![Merge([1,2]), Merge([1,3]), Merge([2,3]), Merge([5,6])];
+  let result = find_merge(input.view());
+  assert_eq!(answer.len(), result.len());
+  assert!(result.iter().all(|x| answer.contains(x)));
+}
+
+fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
   /* REDUCING 2-REGION MERGERS TO N-REGION MERGERS
     We are given a list of *locally* connected regions. For instance:
       (1,2) and (2,4)
@@ -376,44 +459,63 @@ fn make_colour_map(base_map: &mut [usize], local_mergers: &[Merge]) {
       (1,2,3,4,5)
     regardless of the order in which they were specified!
   */
-  let mut connected_mergers: Vec<Vec<usize>> = Vec::new();
+  let mut full_mergers: Vec<Vec<usize>> = Vec::new();
 
-  for mut local_merge in local_mergers {
-    //Find all the current items in `connected_mergers` that `local_merge` is
-    //connected to
-    let connected: Vec<_> = connected_mergers
-      .iter()
-      .enumerate()
-      .filter_map(|(idx, connected_region)| {
-        //If the connected region contains *any* colour that the local merger also
-        //contains, it is connected to the local region
-        if local_merge.iter().any(|col| connected_region.contains(col)) {
-          Some(idx)
+  for &pair_merge in pair_mergers {
+    //If pair_merge connects two full_merge regions, they have to be merged into
+    //a single large region
+    let [col1, col2]: [usize; 2] = pair_merge.into();
+    let mut connect = [None, None];
+    for (idx, region) in full_mergers.iter().enumerate() {
+      if region.contains(&col1) || region.contains(&col2) {
+        if connect[0].is_none() {
+          connect[0] = Some(idx)
+        } else if connect[1].is_none() {
+          connect[1] = Some(idx);
+          break;
         } else {
-          None
+          panic!("Unreachable code path!")
         }
-      })
-      .collect();
-    //We merge all newly connected regions + the colours from the local merger
-    let mut new_region = Vec::new();
-    connected.into_iter().for_each(|idx|
-        //This will leave some regions in `connected_mergers` empty
-        new_region.append(connected_mergers.get_mut(idx).unwrap()));
-    new_region.append(&mut local_merge);
+      }
+    }
+    
+    if connect == [None, None] {
+      //This pair_merge does not connect two full_merge regions, so it must be added
+      //as its own full_merge region
+      full_mergers.push(vec![col1, col2]);
+    } else if let [Some(reg_idx), None] = connect {
+      //This pair_merge *does* connect with another region, but only one.
+      let reg = full_mergers.get_mut(reg_idx).unwrap();
+      reg.extend_from_slice(&[col1, col2]);
+      reg.sort();
+      reg.dedup();
+    } else if let [Some(reg_idx1), Some(reg_idx2)] = connect {
+      //This pair_merge connects two regions, we must merge pair_merge AND both
+      //regions at the same time.
 
-    //Remove duplicate colours
-    new_region.sort();
-    new_region.dedup();
+      //Obtain a mutable ref to both regions (we'll drain one of them)
+      //This code is messy thanks to the borrow checker
+      let (reg1, reg2) = {
+        let (larger, smaller) = if reg_idx1 > reg_idx2 {
+          (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
+        let (head, tail) = full_mergers.split_at_mut(smaller + 1);
+        (&mut head[smaller], &mut tail[larger - smaller - 1])
+      };
 
-    //remove empty regions and append our new one
-    connected_mergers.push(new_region);
-    connected_mergers = connected_mergers
+      //Drain region2 into region 1.
+      //We do not have to append col1 or col2 because they are already contained
+      //in reg1 and reg2. That is why we are merging them after all.
+      reg1.append(reg2);
+    }
+
+    //remove empty regions
+    full_mergers = full_mergers
       .into_iter()
       .filter(|region| !region.is_empty())
       .collect();
   }
 
-  for merge in connected_mergers {
+  for merge in full_mergers {
     let merged_col = *merge.get(0).expect("tried to merge zero regions");
     base_map
       .iter_mut()
@@ -430,24 +532,24 @@ fn test_make_colour_map() {
   
   //Test merging of once-connected region
   cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, vec![vec![1,2]]);
+  make_colour_map(&mut cmap, &vec![Merge([1,2])]);
   assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
   
   //Now test multiple non-connected regions
   cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, vec![vec![1,2], vec![8,9]]);
+  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([8,9])]);
   assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
 
   //Now test multiple *connected* regions
   cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, vec![vec![1,2], vec![2,3]]);
+  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([2,3])]);
   assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
 
   //Two consecutive mergers
   cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  make_colour_map(&mut cmap, vec![vec![1,2], vec![8,9]]);
+  make_colour_map(&mut cmap, &vec![Merge([1,2]), Merge([8,9])]);
   dbg!(&cmap);
-  make_colour_map(&mut cmap, vec![vec![1,7], vec![7,8]]);
+  make_colour_map(&mut cmap, &vec![Merge([1,7]), Merge([7,8])]);
   dbg!(&cmap);
   assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
 }
@@ -1142,7 +1244,7 @@ impl Watershed for MergingWatershed {
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
         let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, to_merge);
+        make_colour_map(&mut colour_map, &to_merge);
         assert!(colour_map[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
@@ -1341,7 +1443,7 @@ impl Watershed for MergingWatershed {
           The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
         */
         let mut colour_map: Vec<usize> = colours.clone();
-        make_colour_map(&mut colour_map, to_merge);
+        make_colour_map(&mut colour_map, &to_merge);
         assert!(colour_map[UNCOLOURED] == UNCOLOURED);
 
         //(C) Recolour the canvas with the colour map if the map is not empty
