@@ -442,15 +442,12 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
     .flatten()
     .collect::<Vec<_>>();
 
-  println!("{}", merge.len());
   //Remove duplicates (unstable sort may reorder duplicates, we don't care
   //because the whole point of sorting the vec is to get RID of duplicates!)
   merge.par_sort_unstable_by(sort_by_big_small);
   merge.dedup();
   merge.par_sort_unstable_by(sort_by_small_big);
   merge.dedup();
-
-  println!("{}", merge.len());
   return merge;
 }
 
