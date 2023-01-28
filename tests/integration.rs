@@ -19,7 +19,7 @@
   licensee subject to Dutch law as per article 15 of the EUPL.
 */
 
-use std::sync::{RwLock, Mutex, Arc};
+use std::sync::{RwLock, Mutex};
 
 use ndarray as nd;
 use ndarray_rand::{
