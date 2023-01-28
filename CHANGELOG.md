@@ -2,6 +2,9 @@
 ![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # rustronomy-watershed changelog
 
+## v0.3.1
+Removed a `println!` debug statement that I forgot about 
+
 ## v0.3.0
 This version does not contain any breaking API changes, but it fixes a *major*
 bug in the merging watershed transforms. Previously, there was some randomisation
