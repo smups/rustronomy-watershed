@@ -1,5 +1,5 @@
-![rustronomy_dark_banner](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_dark.png?raw=true#gh-light-mode-only)
-![rustronomy_light_banner](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
+![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_dark.png?raw=true#gh-light-mode-only)
+![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # The Rustronomy watershed - a pure rust implementation of the segmenting and merging watershed algorithms
 [![License: EUPL v1.2](https://img.shields.io/badge/License-EUPLv1.2-blue.svg)](https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12)
 [![Crates.io](https://img.shields.io/crates/v/rustronomy-watershed)](https://crates.io/crates/rustronomy-watershed)
@@ -37,6 +37,9 @@ To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the foll
 ```rust
 :dep rustronomy-watershed = {version = "0.1"}
 ```
+
+> Please do not use any versions before 0.3, as they contain a major bug in the implementation of the merging watershed algorithm
+
 If you want to use the latest (unstable) development version of `rustronomy-watershed`, you can do so by using the `git` field (which fetches the latest version from the repo) rather than the `version` field (which downloads the latest released version from crates.io). 
 ```
 {git = "https://github.com/smups/rustronomy-watershed"}
