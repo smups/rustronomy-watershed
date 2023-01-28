@@ -1221,11 +1221,8 @@ impl Watershed for MergingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1412,11 +1409,8 @@ impl Watershed for MergingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1629,11 +1623,8 @@ impl Watershed for SegmentingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1772,11 +1763,8 @@ impl Watershed for SegmentingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
