@@ -26,6 +26,7 @@ use ndarray_rand::{
   rand_distr::{Poisson, Uniform},
   RandomExt,
 };
+#[cfg(feature = "plots")]
 use plotters::style::RGBColor;
 use rand::Rng;
 use rustronomy_fits as rsf;
