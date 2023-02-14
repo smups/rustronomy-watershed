@@ -19,7 +19,7 @@
   licensee subject to Dutch law as per article 15 of the EUPL.
 */
 
-use std::sync::{RwLock, Mutex};
+use std::sync::{Mutex, RwLock};
 
 use ndarray as nd;
 use ndarray_rand::{
@@ -53,7 +53,9 @@ static CMAP: Mutex<Vec<(u8, u8, u8)>> = Mutex::new(Vec::new());
 #[cfg(feature = "plots")]
 fn cmap(count: usize, _min: usize, _max: usize) -> Result<RGBColor, Box<dyn std::error::Error>> {
   let mut cols = CMAP.lock().unwrap();
-  if cols.is_empty() { cols.push((0,0,0)) }
+  if cols.is_empty() {
+    cols.push((0, 0, 0))
+  }
   if let Some(c) = cols.get(count) {
     Ok(RGBColor(c.0, c.1, c.2))
   } else {

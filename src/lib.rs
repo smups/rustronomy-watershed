@@ -279,9 +279,10 @@ fn test_find_px() {
     [0, 1, 0, 0, 0, 1, 1, 0],
     [0, 0, 0, 0, 0, 0, 0, 0]
   ];
-  let answer1 = [(1,5), (2,2), (4,4), (5,6)];
+  let answer1 = [(1, 5), (2, 2), (4, 4), (5, 6)];
   let attempt1 = find_flooded_px(input.view(), colours.view(), 2)
-    .into_iter().map(|(x, _)| x)
+    .into_iter()
+    .map(|(x, _)| x)
     .collect::<Vec<_>>();
   for answer in answer1 {
     assert!(attempt1.contains(&answer))
@@ -305,7 +306,7 @@ impl PartialEq for Merge {
 
 #[test]
 fn test_merge_eq() {
-  assert_eq!(Merge([1,2]), Merge([2,1]));
+  assert_eq!(Merge([1, 2]), Merge([2, 1]));
 }
 
 #[inline(always)]
@@ -314,17 +315,11 @@ fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   if this == that {
     return Equal;
   }
-  let (self_small, self_big) = if this.0[0] > this.0[1] {
-    (this.0[0], this.0[1])
-  } else {
-    (this.0[0], this.0[1])
-  };
-  let (other_small, other_big) = if that.0[0] > that.0[1] {
-    (that.0[0], that.0[1])
-  } else {
-    (that.0[1], that.0[0])
-  };
-  
+  let (self_small, self_big) =
+    if this.0[0] > this.0[1] { (this.0[0], this.0[1]) } else { (this.0[0], this.0[1]) };
+  let (other_small, other_big) =
+    if that.0[0] > that.0[1] { (that.0[0], that.0[1]) } else { (that.0[1], that.0[0]) };
+
   //First order on the basis of the smallest elements, then the largest ones
   if self_small < other_small {
     Less
@@ -341,10 +336,10 @@ fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
 fn test_merge_ord_small_big() {
   use std::cmp::Ordering::*;
   let cmp = sort_by_small_big;
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
-  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
-  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1, 2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4, 5])), Less);
 }
 
 #[inline(always)]
@@ -353,17 +348,11 @@ fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   if this == that {
     return Equal;
   }
-  let (self_small, self_big) = if this.0[0] > this.0[1] {
-    (this.0[0], this.0[1])
-  } else {
-    (this.0[0], this.0[1])
-  };
-  let (other_small, other_big) = if that.0[0] > that.0[1] {
-    (that.0[0], that.0[1])
-  } else {
-    (that.0[1], that.0[0])
-  };
-  
+  let (self_small, self_big) =
+    if this.0[0] > this.0[1] { (this.0[0], this.0[1]) } else { (this.0[0], this.0[1]) };
+  let (other_small, other_big) =
+    if that.0[0] > that.0[1] { (that.0[0], that.0[1]) } else { (that.0[1], that.0[0]) };
+
   //First order on the basis of the smallest elements, then the largest ones
   if self_big < other_big {
     Less
@@ -380,20 +369,24 @@ fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
 fn test_merge_ord_big_small() {
   use std::cmp::Ordering::*;
   let cmp = sort_by_big_small;
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
-  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
-  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Greater);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1, 2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4, 5])), Greater);
 }
 
 impl From<[usize; 2]> for Merge {
   #[inline(always)]
-  fn from(value: [usize; 2]) -> Self { Self(value) }
+  fn from(value: [usize; 2]) -> Self {
+    Self(value)
+  }
 }
 
 impl From<Merge> for [usize; 2] {
   #[inline(always)]
-  fn from(value: Merge) -> Self { value.0 }
+  fn from(value: Merge) -> Self {
+    value.0
+  }
 }
 
 fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
@@ -412,7 +405,7 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
       3. Check if the pixel has neighbours of different colours
         YES -> continue, NO -> ignore (this is a lake pixel)
       4. All neighbours that are left are now different colours than the MID px
-        AND are not uncoloured. These pairs have to be merged 
+        AND are not uncoloured. These pairs have to be merged
   */
   let mut merge = nd::Zip::from(col.windows(WINDOW))
     .into_par_iter()
@@ -434,10 +427,9 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
     .map(|(own_col, neigh_col)| {
       neigh_col
         .into_iter()
-        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes) 
-        .filter_map(|c| if c == own_col { None } else {
-          Some(Merge::from([own_col, c]))
-        }).collect::<Vec<_>>()
+        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes)
+        .filter_map(|c| if c == own_col { None } else { Some(Merge::from([own_col, c])) })
+        .collect::<Vec<_>>()
     })
     .flatten()
     .collect::<Vec<_>>();
@@ -465,7 +457,7 @@ fn test_find_merge() {
     [0, 4, 4, 0, 0, 5, 6, 0],
     [0, 0, 0, 0, 0, 0, 0, 0],
   ];
-  let answer = vec![Merge([1,2]), Merge([1,3]), Merge([2,3]), Merge([5,6])];
+  let answer = vec![Merge([1, 2]), Merge([1, 3]), Merge([2, 3]), Merge([5, 6])];
   let result = find_merge(input.view());
   assert_eq!(answer.len(), result.len());
   assert!(result.iter().all(|x| answer.contains(x)));
@@ -508,7 +500,7 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
         }
       }
     }
-    
+
     if connect == [None, None] {
       //This pair_merge does not connect two full_merge regions, so it must be added
       //as its own full_merge region
@@ -526,8 +518,8 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
       //Obtain a mutable ref to both regions (we'll drain one of them)
       //This code is messy thanks to the borrow checker
       let (reg1, reg2) = {
-        let (larger, smaller) = if reg_idx1 > reg_idx2 {
-          (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
+        let (larger, smaller) =
+          if reg_idx1 > reg_idx2 { (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
         let (head, tail) = full_mergers.split_at_mut(smaller + 1);
         (&mut head[smaller], &mut tail[larger - smaller - 1])
       };
@@ -539,18 +531,12 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
     }
 
     //remove empty regions
-    full_mergers = full_mergers
-      .into_iter()
-      .filter(|region| !region.is_empty())
-      .collect();
+    full_mergers = full_mergers.into_iter().filter(|region| !region.is_empty()).collect();
   }
 
   for merge in full_mergers {
     let merged_col = *merge.get(0).expect("tried to merge zero regions");
-    base_map
-      .iter_mut()
-      .filter(|x| merge.contains(x))
-      .for_each(|x| *x = merged_col);
+    base_map.iter_mut().filter(|x| merge.contains(x)).for_each(|x| *x = merged_col);
   }
 }
 
@@ -563,36 +549,36 @@ fn test_make_colour_map() {
   for _ in 0..10 {
     //Test merging of once-connected region
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    make_colour_map(&mut cmap, &vec![Merge([1,2])]);
+    make_colour_map(&mut cmap, &vec![Merge([1, 2])]);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
-    
+
     //Now test multiple non-connected regions
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    let mut input = vec![Merge([1, 2]), Merge([8, 9])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
 
     //Now test multiple *connected* regions
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([2,3])];
+    let mut input = vec![Merge([1, 2]), Merge([2, 3])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
 
     //Two consecutive mergers
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    let mut input = vec![Merge([1, 2]), Merge([8, 9])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
-    let mut input = vec![Merge([1,7]), Merge([7,8])];
+    let mut input = vec![Merge([1, 7]), Merge([7, 8])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
 
     //Repeated merger (somehow)
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([3,2]), Merge([2,1])];
+    let mut input = vec![Merge([1, 2]), Merge([3, 2]), Merge([2, 1])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
@@ -1014,7 +1000,7 @@ pub trait WatershedUtils {
   ///
   /// This function also automatically clamps the pixel values of the array to
   /// the range between 0 and the supplied MAX constant.
-  /// 
+  ///
   /// # example usage
   /// This function can be used as a replacement for the pre-processor if you want
   /// to normalise the input to the water transform to a different range than
@@ -1025,19 +1011,19 @@ pub trait WatershedUtils {
   ///
   /// //Set custom maximum waterlevel
   /// const MY_MAX: u8 = 127;
-  /// 
+  ///
   /// //Create a random uniform distribution
   /// let rf = nd::Array2::<f64>::random((512, 512), Uniform::new(0.0, 1.0));
-  /// 
+  ///
   /// //Set-up the watershed transform
   /// let watershed = TransformBuilder::new_segmenting()
   ///     .set_max_water_lvl(MY_MAX)
   ///     .build()
   ///     .unwrap();
-  /// 
+  ///
   /// //Run pre-processor (using turbofish syntax)
   /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
-  /// 
+  ///
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
   /// //Execute the watershed transform
