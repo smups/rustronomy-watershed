@@ -952,13 +952,15 @@ impl TransformBuilder {
       Ok(Box::new(SegmentingWatershed {
         plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
       }))
     } else {
       Ok(Box::new(MergingWatershed {
         plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
       }))
     }
   }
@@ -969,9 +971,15 @@ impl TransformBuilder {
   /// variant and can be safely unwrapped.
   pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     if self.segmenting {
-      Ok(Box::new(SegmentingWatershed { max_water_level: self.max_water_level }))
+      Ok(Box::new(SegmentingWatershed {
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
+      }))
     } else {
-      Ok(Box::new(MergingWatershed { max_water_level: self.max_water_level }))
+      Ok(Box::new(MergingWatershed {
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
+      }))
     }
   }
 }
@@ -1200,6 +1208,7 @@ pub struct MergingWatershed {
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
+  edge_correction: bool
 }
 
 impl Watershed for MergingWatershed {
@@ -1606,6 +1615,7 @@ pub struct SegmentingWatershed {
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
+  edge_correction: bool
 }
 
 impl Watershed for SegmentingWatershed {
