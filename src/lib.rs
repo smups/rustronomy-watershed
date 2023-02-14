@@ -858,19 +858,20 @@ pub struct TransformBuilder {
   //Basic transform options
   segmenting: bool,
   max_water_level: u8,
+  edge_correction: bool
 }
 
 impl TransformBuilder {
   #[cfg(not(feature = "plots"))]
   /// creates a new `TransformBuilder` configured for a segmenting transform
   pub fn new_segmenting() -> Self {
-    TransformBuilder { segmenting: true, max_water_level: NORMAL_MAX }
+    TransformBuilder { segmenting: true, max_water_level: NORMAL_MAX, edge_correction: false }
   }
 
   #[cfg(not(feature = "plots"))]
   /// creates a new `TransformBuilder` configured for a merging transform
   pub fn new_merging() -> Self {
-    TransformBuilder { segmenting: false, max_water_level: NORMAL_MAX }
+    TransformBuilder { segmenting: false, max_water_level: NORMAL_MAX, edge_correction: false }
   }
 
   #[cfg(feature = "plots")]
@@ -899,6 +900,14 @@ impl TransformBuilder {
   /// maximum water level may not be set higher than `u8::MAX - 1` (254).
   pub fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
     self.max_water_level = max_water_lvl;
+    self
+  }
+
+  /// Enables edge correction. Turning this setting on properly colours the edges
+  /// of the input image at the cost of increased memory consumption and two
+  /// full-image copies.
+  pub fn enable_edge_correction(mut self) -> Self {
+    self.edge_correction = true;
     self
   }
 
@@ -1731,6 +1740,9 @@ impl Watershed for SegmentingWatershed {
         bar.inc(1);
       }
     });
+
+    //(5) Colour the edges of the image
+
 
     //Return transform of image
     return output;
