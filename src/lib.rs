@@ -864,7 +864,7 @@ pub struct TransformBuilder {
 
 impl TransformBuilder {
   /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub fn new_segmenting() -> Self {
+  pub const fn new_segmenting() -> Self {
     TransformBuilder {
       segmenting: true,
       max_water_level: NORMAL_MAX,
@@ -877,7 +877,7 @@ impl TransformBuilder {
   }
 
   /// creates a new `TransformBuilder` configured for a merging transform
-  pub fn new_merging() -> Self {
+  pub const fn new_merging() -> Self {
     TransformBuilder {
       segmenting: false,
       max_water_level: NORMAL_MAX,
@@ -891,7 +891,7 @@ impl TransformBuilder {
 
   /// Set the maximum water level that the transform will reach. Note that the
   /// maximum water level may not be set higher than `u8::MAX - 1` (254).
-  pub fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
+  pub const fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
     self.max_water_level = max_water_lvl;
     self
   }
@@ -899,7 +899,7 @@ impl TransformBuilder {
   /// Enables edge correction. Turning this setting on properly colours the edges
   /// of the input image at the cost of increased memory consumption and two
   /// full-image copies.
-  pub fn enable_edge_correction(mut self) -> Self {
+  pub const fn enable_edge_correction(mut self) -> Self {
     self.edge_correction = true;
     self
   }
