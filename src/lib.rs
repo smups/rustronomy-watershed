@@ -883,6 +883,7 @@ impl TransformBuilder {
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: true,
       max_water_level: NORMAL_MAX,
+      edge_correction: false
     }
   }
 
@@ -894,6 +895,7 @@ impl TransformBuilder {
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: false,
       max_water_level: NORMAL_MAX,
+      edge_correction: false
     }
   }
 
