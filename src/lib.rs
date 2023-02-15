@@ -118,6 +118,7 @@
 //! The generated plots are png files with no text. Each pixel in the generated
 //! images corresponds 1:1 to a pixel in the input array.
 
+use nd::ArrayView2;
 //Unconditional imports
 use ndarray as nd;
 use num_traits::{Num, ToPrimitive};
@@ -969,7 +970,7 @@ impl TransformBuilder {
   /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
   /// configuration. This function will currently **never** return an `Err`
   /// variant and can be safely unwrapped.
-  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
+  pub fn build(self) -> Result<Box<dyn Watershed<'static> + Send + Sync>, String> {
     if self.segmenting {
       Ok(Box::new(SegmentingWatershed {
         max_water_level: self.max_water_level,
@@ -1119,9 +1120,9 @@ pub trait WatershedUtils {
 /// Actual trait for performing the watershed transform. It is implemented in
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
-pub trait Watershed {
+pub trait Watershed<'a> {
   /// Returns watershed transform of input image.
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
+  fn transform(&self, input: nd::ArrayView2<'a, u8>, seeds: &'a [(usize, usize)]) -> nd::Array2<usize>;
 
   /// Returns a Vec containing the areas of all the lakes per water level. The
   /// length of the nested Vec is always equal to the number of seeds, although
@@ -1129,8 +1130,8 @@ pub trait Watershed {
   /// see docs for `MergingWatershed`)
   fn transform_to_list(
     &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
+    input: nd::ArrayView2<'a, u8>,
+    seeds: &'a [(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)>;
 
   /// Returns a list of images where each image corresponds to a snapshot of the
@@ -1142,13 +1143,13 @@ pub trait Watershed {
   /// feature instead.
   fn transform_history(
     &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
+    input: nd::ArrayView2<'a, u8>,
+    seeds: &'a [(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)>;
 }
 
-impl WatershedUtils for dyn Watershed {}
-impl WatershedUtils for dyn Watershed + Send + Sync {}
+impl WatershedUtils for dyn Watershed<'_> {}
+impl WatershedUtils for dyn Watershed<'_> + Send + Sync {}
 
 /// Implementation of the merging watershed algorithm.
 ///
@@ -1211,15 +1212,37 @@ pub struct MergingWatershed {
   edge_correction: bool
 }
 
-impl Watershed for MergingWatershed {
+impl<'a> Watershed<'a> for MergingWatershed {
   fn transform_to_list(
     &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
+    input: nd::ArrayView2<'a, u8>,
+    seeds: &'a [(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else { [input.shape()[0], input.shape()[1]] };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input = if self.edge_correction {
+      Some(nd::Array2::<u8>::zeros(shape))
+    } else { None };
+    let input = if self.edge_correction {      
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+      )
+        .and(input)
+        .into_par_iter()
+        .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else { input.reborrow() };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1240,7 +1263,7 @@ impl Watershed for MergingWatershed {
     let bar = set_up_bar(self.max_water_level);
 
     //(4) count lakes for all water levels
-    (0..self.max_water_level)
+    let lake_size_list = (0..self.max_water_level)
       .into_iter()
       .map(|water_level| {
         //(logging) make a new perfreport
@@ -1383,7 +1406,9 @@ impl Watershed for MergingWatershed {
         //(vi) Yield a (water_level, lakesizes) pair
         (water_level, lake_sizes)
       })
-      .collect()
+      .collect::<Vec<_>>();
+
+      return lake_size_list;
   }
 
   fn transform(&self, input: nd::ArrayView2<u8>, _seeds: &[(usize, usize)]) -> nd::Array2<usize> {
@@ -1618,7 +1643,7 @@ pub struct SegmentingWatershed {
   edge_correction: bool
 }
 
-impl Watershed for SegmentingWatershed {
+impl<'a> Watershed<'a> for SegmentingWatershed {
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
     //(1) make an image for holding the different water colours
     let shape = [input.shape()[0], input.shape()[1]];
