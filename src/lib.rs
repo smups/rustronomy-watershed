@@ -1430,9 +1430,31 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else { [input.shape()[0], input.shape()[1]] };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input = if self.edge_correction {
+      Some(nd::Array2::<u8>::zeros(shape))
+    } else { None };
+    let input = if self.edge_correction {      
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+      )
+        .and(input)
+        .into_par_iter()
+        .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else { input.reborrow() };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1587,8 +1609,11 @@ impl Watershed for MergingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, image) pair
-        (water_level, output.clone())
+        //(vi) Yield a (water_level, image) pair, taking into account the padding
+        //of the input image
+        if self.edge_correction {
+          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
+        } else { (water_level, output.clone()) }
       })
       .collect()
   }
