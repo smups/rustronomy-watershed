@@ -863,39 +863,29 @@ pub struct TransformBuilder {
 }
 
 impl TransformBuilder {
-  #[cfg(not(feature = "plots"))]
-  /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub fn new_segmenting() -> Self {
-    TransformBuilder { segmenting: true, max_water_level: NORMAL_MAX, edge_correction: false }
-  }
-
-  #[cfg(not(feature = "plots"))]
-  /// creates a new `TransformBuilder` configured for a merging transform
-  pub fn new_merging() -> Self {
-    TransformBuilder { segmenting: false, max_water_level: NORMAL_MAX, edge_correction: false }
-  }
-
-  #[cfg(feature = "plots")]
   /// creates a new `TransformBuilder` configured for a segmenting transform
   pub fn new_segmenting() -> Self {
     TransformBuilder {
-      plot_path: None,
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: true,
       max_water_level: NORMAL_MAX,
-      edge_correction: false
+      edge_correction: false,
+      #[cfg(feature = "plots")]
+      plot_path: None,
+      #[cfg(feature = "plots")]
+      plot_colour_map: Some(plotting::viridis) //default map is Viridis
     }
   }
 
-  #[cfg(feature = "plots")]
   /// creates a new `TransformBuilder` configured for a merging transform
   pub fn new_merging() -> Self {
     TransformBuilder {
-      plot_path: None,
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: false,
       max_water_level: NORMAL_MAX,
-      edge_correction: false
+      edge_correction: false,
+      #[cfg(feature = "plots")]
+      plot_path: None,
+      #[cfg(feature = "plots")]
+      plot_colour_map: Some(plotting::viridis), //default map is Viridis
     }
   }
 
