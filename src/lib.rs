@@ -970,7 +970,7 @@ impl TransformBuilder {
   /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
   /// configuration. This function will currently **never** return an `Err`
   /// variant and can be safely unwrapped.
-  pub fn build(self) -> Result<Box<dyn Watershed<'static> + Send + Sync>, String> {
+  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     if self.segmenting {
       Ok(Box::new(SegmentingWatershed {
         max_water_level: self.max_water_level,
@@ -1120,9 +1120,9 @@ pub trait WatershedUtils {
 /// Actual trait for performing the watershed transform. It is implemented in
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
-pub trait Watershed<'a> {
+pub trait Watershed {
   /// Returns watershed transform of input image.
-  fn transform(&self, input: nd::ArrayView2<'a, u8>, seeds: &'a [(usize, usize)]) -> nd::Array2<usize>;
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
 
   /// Returns a Vec containing the areas of all the lakes per water level. The
   /// length of the nested Vec is always equal to the number of seeds, although
@@ -1130,8 +1130,8 @@ pub trait Watershed<'a> {
   /// see docs for `MergingWatershed`)
   fn transform_to_list(
     &self,
-    input: nd::ArrayView2<'a, u8>,
-    seeds: &'a [(usize, usize)],
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)>;
 
   /// Returns a list of images where each image corresponds to a snapshot of the
@@ -1143,13 +1143,13 @@ pub trait Watershed<'a> {
   /// feature instead.
   fn transform_history(
     &self,
-    input: nd::ArrayView2<'a, u8>,
-    seeds: &'a [(usize, usize)],
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)>;
 }
 
-impl WatershedUtils for dyn Watershed<'_> {}
-impl WatershedUtils for dyn Watershed<'_> + Send + Sync {}
+impl WatershedUtils for dyn Watershed {}
+impl WatershedUtils for dyn Watershed + Send + Sync {}
 
 /// Implementation of the merging watershed algorithm.
 ///
@@ -1212,11 +1212,11 @@ pub struct MergingWatershed {
   edge_correction: bool
 }
 
-impl<'a> Watershed<'a> for MergingWatershed {
+impl Watershed for MergingWatershed {
   fn transform_to_list(
     &self,
-    input: nd::ArrayView2<'a, u8>,
-    seeds: &'a [(usize, usize)],
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
     //(1a) make an image for holding the different water colours
     let shape = if self.edge_correction {
@@ -1643,7 +1643,7 @@ pub struct SegmentingWatershed {
   edge_correction: bool
 }
 
-impl<'a> Watershed<'a> for SegmentingWatershed {
+impl Watershed for SegmentingWatershed {
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
     //(1) make an image for holding the different water colours
     let shape = [input.shape()[0], input.shape()[1]];
