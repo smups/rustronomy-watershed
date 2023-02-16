@@ -1254,7 +1254,7 @@ impl Watershed for MergingWatershed {
     let bar = set_up_bar(self.max_water_level);
 
     //(4) count lakes for all water levels
-    let lake_size_list = (0..self.max_water_level)
+    (0..self.max_water_level)
       .into_iter()
       .map(|water_level| {
         //(logging) make a new perfreport
@@ -1399,10 +1399,7 @@ impl Watershed for MergingWatershed {
 
         //(vi) Yield a (water_level, lakesizes) pair
         (water_level, lake_sizes)
-      })
-      .collect::<Vec<_>>();
-
-      return lake_size_list;
+      }).collect()
   }
 
   fn transform(&self, input: nd::ArrayView2<u8>, _seeds: &[(usize, usize)]) -> nd::Array2<usize> {
