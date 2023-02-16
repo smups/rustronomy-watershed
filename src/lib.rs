@@ -1199,6 +1199,13 @@ impl WatershedUtils for dyn Watershed + Send + Sync {}
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
+/// 
+/// A workaround can be enabled by calling `enable_edge_correction` on the
+/// `TransformBuilder`. Enabling this setting copies the input image into a
+/// new array, 1px wider on all sides. This padded array is then used as the
+/// actual input to the watershed transform. The final output of the transform is
+/// a copy of this intermediate array with the padding removed. The padding also
+/// does not show up in the output of intermediate plots.
 pub struct MergingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
@@ -1671,6 +1678,13 @@ impl Watershed for MergingWatershed {
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
+/// 
+/// A workaround can be enabled by calling `enable_edge_correction` on the
+/// `TransformBuilder`. Enabling this setting copies the input image into a
+/// new array, 1px wider on all sides. This padded array is then used as the
+/// actual input to the watershed transform. The final output of the transform is
+/// a copy of this intermediate array with the padding removed. The padding also
+/// does not show up in the output of intermediate plots.
 pub struct SegmentingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
