@@ -59,7 +59,9 @@ fn cmap(count: usize, _min: usize, _max: usize) -> Result<RGBColor, Box<dyn std:
     //Aquire write lock
     drop(lock);
     let mut lock = CMAP.write()?;
-    if lock.is_empty() { lock.push((0, 0, 0)) };
+    if lock.is_empty() {
+      lock.push((0, 0, 0))
+    };
     let mut rng = rand::thread_rng();
     let c = (rng.gen_range(25..u8::MAX), rng.gen_range(25..u8::MAX), rng.gen_range(25..u8::MAX));
     lock.push(c.clone());
