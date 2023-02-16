@@ -118,7 +118,6 @@
 //! The generated plots are png files with no text. Each pixel in the generated
 //! images corresponds 1:1 to a pixel in the input array.
 
-use nd::ArrayView2;
 //Unconditional imports
 use ndarray as nd;
 use num_traits::{Num, ToPrimitive};
