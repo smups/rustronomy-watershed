@@ -19,7 +19,7 @@
   licensee subject to Dutch law as per article 15 of the EUPL.
 */
 
-use std::sync::{RwLock, Mutex};
+use std::sync::RwLock;
 
 use ndarray as nd;
 use ndarray_rand::{
@@ -47,19 +47,24 @@ fn get_root_path() -> std::path::PathBuf {
     .expect(&format!("could not canonicalize path found in ${DATA_ENV} env. variable"))
 }
 
-static CMAP: Mutex<Vec<(u8, u8, u8)>> = Mutex::new(Vec::new());
+static CMAP: RwLock<Vec<(u8, u8, u8)>> = RwLock::new(Vec::new());
 
 #[inline]
 #[cfg(feature = "plots")]
 fn cmap(count: usize, _min: usize, _max: usize) -> Result<RGBColor, Box<dyn std::error::Error>> {
-  let mut cols = CMAP.lock().unwrap();
-  if cols.is_empty() { cols.push((0,0,0)) }
-  if let Some(c) = cols.get(count) {
+  let lock = CMAP.read()?;
+  if let Some(c) = lock.get(count) {
     Ok(RGBColor(c.0, c.1, c.2))
   } else {
+    //Aquire write lock
+    drop(lock);
+    let mut lock = CMAP.write()?;
+    if lock.is_empty() {
+      lock.push((0, 0, 0))
+    };
     let mut rng = rand::thread_rng();
     let c = (rng.gen_range(25..u8::MAX), rng.gen_range(25..u8::MAX), rng.gen_range(25..u8::MAX));
-    cols.push(c.clone());
+    lock.push(c.clone());
     Ok(RGBColor(c.0, c.1, c.2))
   }
 }
@@ -126,6 +131,7 @@ fn test_merging_uniform() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 
@@ -190,6 +196,7 @@ fn test_merging_poisson() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 
@@ -267,6 +274,7 @@ fn test_merging_real() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 
@@ -355,6 +363,7 @@ fn test_merging_real_with_nan() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 
@@ -429,6 +438,7 @@ fn test_merging_gaussian() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 
@@ -527,6 +537,7 @@ fn test_merging_real_smoothed() {
   let watershed = TransformBuilder::new_merging()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
+    .enable_edge_correction()
     .build()
     .unwrap();
 

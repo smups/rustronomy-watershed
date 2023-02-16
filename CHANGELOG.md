@@ -2,6 +2,19 @@
 ![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # rustronomy-watershed changelog
 
+## v0.3.2
+_This version adds a new feature, but does not break the existing API and is
+therefore marked as minor._
+
+This version adds a new option to the `TransformBuilder`: `enable_edge_correction()`.
+Calling this method enables a correction to the watershed algorithm which fixes
+the edges of input images never being included in the watershed transform. This
+incurs a performance and memory penalty, since the input image has to be embedded
+in a larger canvas.
+
+The shape of intermediate plots (size in pixels) and the output of the transform
+are not effected by this change.
+
 ## v0.3.1
 Removed a `println!` debug statement that I forgot about 
 

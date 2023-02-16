@@ -279,9 +279,10 @@ fn test_find_px() {
     [0, 1, 0, 0, 0, 1, 1, 0],
     [0, 0, 0, 0, 0, 0, 0, 0]
   ];
-  let answer1 = [(1,5), (2,2), (4,4), (5,6)];
+  let answer1 = [(1, 5), (2, 2), (4, 4), (5, 6)];
   let attempt1 = find_flooded_px(input.view(), colours.view(), 2)
-    .into_iter().map(|(x, _)| x)
+    .into_iter()
+    .map(|(x, _)| x)
     .collect::<Vec<_>>();
   for answer in answer1 {
     assert!(attempt1.contains(&answer))
@@ -305,7 +306,7 @@ impl PartialEq for Merge {
 
 #[test]
 fn test_merge_eq() {
-  assert_eq!(Merge([1,2]), Merge([2,1]));
+  assert_eq!(Merge([1, 2]), Merge([2, 1]));
 }
 
 #[inline(always)]
@@ -314,17 +315,11 @@ fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   if this == that {
     return Equal;
   }
-  let (self_small, self_big) = if this.0[0] > this.0[1] {
-    (this.0[0], this.0[1])
-  } else {
-    (this.0[0], this.0[1])
-  };
-  let (other_small, other_big) = if that.0[0] > that.0[1] {
-    (that.0[0], that.0[1])
-  } else {
-    (that.0[1], that.0[0])
-  };
-  
+  let (self_small, self_big) =
+    if this.0[0] > this.0[1] { (this.0[0], this.0[1]) } else { (this.0[0], this.0[1]) };
+  let (other_small, other_big) =
+    if that.0[0] > that.0[1] { (that.0[0], that.0[1]) } else { (that.0[1], that.0[0]) };
+
   //First order on the basis of the smallest elements, then the largest ones
   if self_small < other_small {
     Less
@@ -341,10 +336,10 @@ fn sort_by_small_big(this: &Merge, that: &Merge) -> std::cmp::Ordering {
 fn test_merge_ord_small_big() {
   use std::cmp::Ordering::*;
   let cmp = sort_by_small_big;
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
-  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
-  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1, 2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4, 5])), Less);
 }
 
 #[inline(always)]
@@ -353,17 +348,11 @@ fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
   if this == that {
     return Equal;
   }
-  let (self_small, self_big) = if this.0[0] > this.0[1] {
-    (this.0[0], this.0[1])
-  } else {
-    (this.0[0], this.0[1])
-  };
-  let (other_small, other_big) = if that.0[0] > that.0[1] {
-    (that.0[0], that.0[1])
-  } else {
-    (that.0[1], that.0[0])
-  };
-  
+  let (self_small, self_big) =
+    if this.0[0] > this.0[1] { (this.0[0], this.0[1]) } else { (this.0[0], this.0[1]) };
+  let (other_small, other_big) =
+    if that.0[0] > that.0[1] { (that.0[0], that.0[1]) } else { (that.0[1], that.0[0]) };
+
   //First order on the basis of the smallest elements, then the largest ones
   if self_big < other_big {
     Less
@@ -380,20 +369,24 @@ fn sort_by_big_small(this: &Merge, that: &Merge) -> std::cmp::Ordering {
 fn test_merge_ord_big_small() {
   use std::cmp::Ordering::*;
   let cmp = sort_by_big_small;
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,1])), Greater);
-  assert_eq!(cmp(&Merge([1, 1]), &Merge([1,2])), Less);
-  assert_eq!(cmp(&Merge([2, 1]), &Merge([1,2])), Equal);
-  assert_eq!(cmp(&Merge([3, 8]), &Merge([4,5])), Greater);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 1])), Greater);
+  assert_eq!(cmp(&Merge([1, 1]), &Merge([1, 2])), Less);
+  assert_eq!(cmp(&Merge([2, 1]), &Merge([1, 2])), Equal);
+  assert_eq!(cmp(&Merge([3, 8]), &Merge([4, 5])), Greater);
 }
 
 impl From<[usize; 2]> for Merge {
   #[inline(always)]
-  fn from(value: [usize; 2]) -> Self { Self(value) }
+  fn from(value: [usize; 2]) -> Self {
+    Self(value)
+  }
 }
 
 impl From<Merge> for [usize; 2] {
   #[inline(always)]
-  fn from(value: Merge) -> Self { value.0 }
+  fn from(value: Merge) -> Self {
+    value.0
+  }
 }
 
 fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
@@ -412,7 +405,7 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
       3. Check if the pixel has neighbours of different colours
         YES -> continue, NO -> ignore (this is a lake pixel)
       4. All neighbours that are left are now different colours than the MID px
-        AND are not uncoloured. These pairs have to be merged 
+        AND are not uncoloured. These pairs have to be merged
   */
   let mut merge = nd::Zip::from(col.windows(WINDOW))
     .into_par_iter()
@@ -434,10 +427,9 @@ fn find_merge(col: nd::ArrayView2<usize>) -> Vec<Merge> {
     .map(|(own_col, neigh_col)| {
       neigh_col
         .into_iter()
-        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes) 
-        .filter_map(|c| if c == own_col { None } else {
-          Some(Merge::from([own_col, c]))
-        }).collect::<Vec<_>>()
+        //(3a) Ignore mergers that merge a region with itself! ([1,1] and the likes)
+        .filter_map(|c| if c == own_col { None } else { Some(Merge::from([own_col, c])) })
+        .collect::<Vec<_>>()
     })
     .flatten()
     .collect::<Vec<_>>();
@@ -465,7 +457,7 @@ fn test_find_merge() {
     [0, 4, 4, 0, 0, 5, 6, 0],
     [0, 0, 0, 0, 0, 0, 0, 0],
   ];
-  let answer = vec![Merge([1,2]), Merge([1,3]), Merge([2,3]), Merge([5,6])];
+  let answer = vec![Merge([1, 2]), Merge([1, 3]), Merge([2, 3]), Merge([5, 6])];
   let result = find_merge(input.view());
   assert_eq!(answer.len(), result.len());
   assert!(result.iter().all(|x| answer.contains(x)));
@@ -508,7 +500,7 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
         }
       }
     }
-    
+
     if connect == [None, None] {
       //This pair_merge does not connect two full_merge regions, so it must be added
       //as its own full_merge region
@@ -526,8 +518,8 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
       //Obtain a mutable ref to both regions (we'll drain one of them)
       //This code is messy thanks to the borrow checker
       let (reg1, reg2) = {
-        let (larger, smaller) = if reg_idx1 > reg_idx2 {
-          (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
+        let (larger, smaller) =
+          if reg_idx1 > reg_idx2 { (reg_idx1, reg_idx2) } else { (reg_idx2, reg_idx1) };
         let (head, tail) = full_mergers.split_at_mut(smaller + 1);
         (&mut head[smaller], &mut tail[larger - smaller - 1])
       };
@@ -539,18 +531,12 @@ fn make_colour_map(base_map: &mut [usize], pair_mergers: &[Merge]) {
     }
 
     //remove empty regions
-    full_mergers = full_mergers
-      .into_iter()
-      .filter(|region| !region.is_empty())
-      .collect();
+    full_mergers = full_mergers.into_iter().filter(|region| !region.is_empty()).collect();
   }
 
   for merge in full_mergers {
     let merged_col = *merge.get(0).expect("tried to merge zero regions");
-    base_map
-      .iter_mut()
-      .filter(|x| merge.contains(x))
-      .for_each(|x| *x = merged_col);
+    base_map.iter_mut().filter(|x| merge.contains(x)).for_each(|x| *x = merged_col);
   }
 }
 
@@ -563,36 +549,36 @@ fn test_make_colour_map() {
   for _ in 0..10 {
     //Test merging of once-connected region
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    make_colour_map(&mut cmap, &vec![Merge([1,2])]);
+    make_colour_map(&mut cmap, &vec![Merge([1, 2])]);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 9]);
-    
+
     //Now test multiple non-connected regions
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    let mut input = vec![Merge([1, 2]), Merge([8, 9])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 7, 8, 8]);
 
     //Now test multiple *connected* regions
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([2,3])];
+    let mut input = vec![Merge([1, 2]), Merge([2, 3])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
 
     //Two consecutive mergers
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([8,9])];
+    let mut input = vec![Merge([1, 2]), Merge([8, 9])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
-    let mut input = vec![Merge([1,7]), Merge([7,8])];
+    let mut input = vec![Merge([1, 7]), Merge([7, 8])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 3, 4, 5, 6, 1, 1, 1]);
 
     //Repeated merger (somehow)
     cmap = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-    let mut input = vec![Merge([1,2]), Merge([3,2]), Merge([2,1])];
+    let mut input = vec![Merge([1, 2]), Merge([3, 2]), Merge([2, 1])];
     input.shuffle(rng);
     make_colour_map(&mut cmap, &input);
     assert!(cmap == [0, 1, 1, 1, 4, 5, 6, 7, 8, 9]);
@@ -860,6 +846,13 @@ use plotters::prelude::*;
 /// can be used to specify folder where the generated images should be placed. If
 /// no output folder is specified when the `plots` feature is enabled, no plots will
 /// be generated (code will still compile).
+/// 
+/// ## `enable_edge_correction`
+/// Calling the `enable_edge_correction` method on the builder signals the
+/// watershed implementations that they should make sure that the edges of the
+/// image are properly included in the watershed transform. This option is disabled
+/// by default since performing this "edge correction" can incur a significant
+/// performance/memory usage hit.
 pub struct TransformBuilder {
   //Plotting options
   #[cfg(feature = "plots")]
@@ -872,54 +865,55 @@ pub struct TransformBuilder {
   //Basic transform options
   segmenting: bool,
   max_water_level: u8,
+  edge_correction: bool,
 }
 
 impl TransformBuilder {
-  #[cfg(not(feature = "plots"))]
   /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub fn new_segmenting() -> Self {
-    TransformBuilder { segmenting: true, max_water_level: NORMAL_MAX }
-  }
-
-  #[cfg(not(feature = "plots"))]
-  /// creates a new `TransformBuilder` configured for a merging transform
-  pub fn new_merging() -> Self {
-    TransformBuilder { segmenting: false, max_water_level: NORMAL_MAX }
-  }
-
-  #[cfg(feature = "plots")]
-  /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub fn new_segmenting() -> Self {
+  pub const fn new_segmenting() -> Self {
     TransformBuilder {
-      plot_path: None,
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: true,
       max_water_level: NORMAL_MAX,
+      edge_correction: false,
+      #[cfg(feature = "plots")]
+      plot_path: None,
+      #[cfg(feature = "plots")]
+      plot_colour_map: Some(plotting::viridis), //default map is Viridis
     }
   }
 
-  #[cfg(feature = "plots")]
   /// creates a new `TransformBuilder` configured for a merging transform
-  pub fn new_merging() -> Self {
+  pub const fn new_merging() -> Self {
     TransformBuilder {
-      plot_path: None,
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
       segmenting: false,
       max_water_level: NORMAL_MAX,
+      edge_correction: false,
+      #[cfg(feature = "plots")]
+      plot_path: None,
+      #[cfg(feature = "plots")]
+      plot_colour_map: Some(plotting::viridis), //default map is Viridis
     }
   }
 
   /// Set the maximum water level that the transform will reach. Note that the
   /// maximum water level may not be set higher than `u8::MAX - 1` (254).
-  pub fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
+  pub const fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
     self.max_water_level = max_water_lvl;
+    self
+  }
+
+  /// Enables edge correction. Turning this setting on properly colours the edges
+  /// of the input image at the cost of increased memory consumption and two
+  /// full-image copies.
+  pub const fn enable_edge_correction(mut self) -> Self {
+    self.edge_correction = true;
     self
   }
 
   #[cfg(feature = "plots")]
   /// Set a custom colour map to be used by `plotters` when generating images
   /// of the watershed transform.
-  pub fn set_plot_colour_map(
+  pub const fn set_plot_colour_map(
     mut self,
     colour_map: fn(
       count: usize,
@@ -957,13 +951,15 @@ impl TransformBuilder {
       Ok(Box::new(SegmentingWatershed {
         plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
       }))
     } else {
       Ok(Box::new(MergingWatershed {
         plot_path: self.plot_path,
         plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction
       }))
     }
   }
@@ -974,9 +970,15 @@ impl TransformBuilder {
   /// variant and can be safely unwrapped.
   pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
     if self.segmenting {
-      Ok(Box::new(SegmentingWatershed { max_water_level: self.max_water_level }))
+      Ok(Box::new(SegmentingWatershed {
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction,
+      }))
     } else {
-      Ok(Box::new(MergingWatershed { max_water_level: self.max_water_level }))
+      Ok(Box::new(MergingWatershed {
+        max_water_level: self.max_water_level,
+        edge_correction: self.edge_correction,
+      }))
     }
   }
 }
@@ -1014,7 +1016,7 @@ pub trait WatershedUtils {
   ///
   /// This function also automatically clamps the pixel values of the array to
   /// the range between 0 and the supplied MAX constant.
-  /// 
+  ///
   /// # example usage
   /// This function can be used as a replacement for the pre-processor if you want
   /// to normalise the input to the water transform to a different range than
@@ -1025,19 +1027,19 @@ pub trait WatershedUtils {
   ///
   /// //Set custom maximum waterlevel
   /// const MY_MAX: u8 = 127;
-  /// 
+  ///
   /// //Create a random uniform distribution
   /// let rf = nd::Array2::<f64>::random((512, 512), Uniform::new(0.0, 1.0));
-  /// 
+  ///
   /// //Set-up the watershed transform
   /// let watershed = TransformBuilder::new_segmenting()
   ///     .set_max_water_lvl(MY_MAX)
   ///     .build()
   ///     .unwrap();
-  /// 
+  ///
   /// //Run pre-processor (using turbofish syntax)
   /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
-  /// 
+  ///
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
   /// //Execute the watershed transform
@@ -1197,6 +1199,13 @@ impl WatershedUtils for dyn Watershed + Send + Sync {}
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
+/// 
+/// A workaround can be enabled by calling `enable_edge_correction` on the
+/// `TransformBuilder`. Enabling this setting copies the input image into a
+/// new array, 1px wider on all sides. This padded array is then used as the
+/// actual input to the watershed transform. The final output of the transform is
+/// a copy of this intermediate array with the padding removed. The padding also
+/// does not show up in the output of intermediate plots.
 pub struct MergingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
@@ -1205,6 +1214,7 @@ pub struct MergingWatershed {
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
+  edge_correction: bool,
 }
 
 impl Watershed for MergingWatershed {
@@ -1213,9 +1223,34 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else {
+      [input.shape()[0], input.shape()[1]]
+    };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input =
+      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
+    let input = if self.edge_correction {
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
+      )
+      .and(input)
+      .into_par_iter()
+      .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else {
+      input.reborrow()
+    };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1348,7 +1383,12 @@ impl Watershed for MergingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else {
+              output.view()
+            },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -1401,9 +1441,34 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else {
+      [input.shape()[0], input.shape()[1]]
+    };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input =
+      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
+    let input = if self.edge_correction {
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
+      )
+      .and(input)
+      .into_par_iter()
+      .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else {
+      input.reborrow()
+    };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1530,7 +1595,12 @@ impl Watershed for MergingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else {
+              output.view()
+            },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -1558,8 +1628,13 @@ impl Watershed for MergingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, image) pair
-        (water_level, output.clone())
+        //(vi) Yield a (water_level, image) pair, taking into account the padding
+        //of the input image
+        if self.edge_correction {
+          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
+        } else {
+          (water_level, output.clone())
+        }
       })
       .collect()
   }
@@ -1603,6 +1678,13 @@ impl Watershed for MergingWatershed {
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
+/// 
+/// A workaround can be enabled by calling `enable_edge_correction` on the
+/// `TransformBuilder`. Enabling this setting copies the input image into a
+/// new array, 1px wider on all sides. This padded array is then used as the
+/// actual input to the watershed transform. The final output of the transform is
+/// a copy of this intermediate array with the padding removed. The padding also
+/// does not show up in the output of intermediate plots.
 pub struct SegmentingWatershed {
   //Plot options
   #[cfg(feature = "plots")]
@@ -1611,13 +1693,39 @@ pub struct SegmentingWatershed {
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
+  edge_correction: bool,
 }
 
 impl Watershed for SegmentingWatershed {
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else {
+      [input.shape()[0], input.shape()[1]]
+    };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input =
+      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
+    let input = if self.edge_correction {
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
+      )
+      .and(input)
+      .into_par_iter()
+      .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else {
+      input.reborrow()
+    };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1718,7 +1826,12 @@ impl Watershed for SegmentingWatershed {
       #[cfg(feature = "plots")]
       if let Some(ref path) = self.plot_path {
         if let Err(err) = plotting::plot_slice(
-          output.view(),
+          if self.edge_correction {
+            //Do not plot the edge correction padding
+            output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+          } else {
+            output.view()
+          },
           &path.join(&format!("ws_lvl{water_level}.png")),
           self.plot_colour_map,
         ) {
@@ -1746,8 +1859,12 @@ impl Watershed for SegmentingWatershed {
       }
     });
 
-    //Return transform of image
-    return output;
+    //Return transform of image, taking into account the edge correction padding
+    if self.edge_correction {
+      output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned()
+    } else {
+      output
+    }
   }
 
   fn transform_to_list(
@@ -1755,9 +1872,34 @@ impl Watershed for SegmentingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else {
+      [input.shape()[0], input.shape()[1]]
+    };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input =
+      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
+    let input = if self.edge_correction {
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
+      )
+      .and(input)
+      .into_par_iter()
+      .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else {
+      input.reborrow()
+    };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1873,7 +2015,12 @@ impl Watershed for SegmentingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else {
+              output.view()
+            },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -1911,16 +2058,38 @@ impl Watershed for SegmentingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else {
+      [input.shape()[0], input.shape()[1]]
+    };
     let mut output = nd::Array2::<usize>::zeros(shape);
 
+    //(1b) reshape the input image if necessary
+    let mut padded_input =
+      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
+    let input = if self.edge_correction {
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
+      )
+      .and(input)
+      .into_par_iter()
+      .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else {
+      input.reborrow()
+    };
+
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -2019,7 +2188,12 @@ impl Watershed for SegmentingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else {
+              output.view()
+            },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -2046,8 +2220,13 @@ impl Watershed for SegmentingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, image) pair
-        (water_level, output.clone())
+        //(vi) Yield a (water_level, image) pair, taking into account the padding
+        //of the input image
+        if self.edge_correction {
+          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
+        } else {
+          (water_level, output.clone())
+        }
       })
       .collect()
   }
