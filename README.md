@@ -21,6 +21,8 @@ accessed via cargo feature gates. A list of all additional features [can be foun
 below](#cargo-feature-gates).
 
 # Gallery
+data from the Canadian Galactic Plane Survey (CGPS)
+
 *Merging watershed algorithm in action*
 ![](./gallery/CGPS_merge.gif)
 
@@ -31,11 +33,11 @@ below](#cargo-feature-gates).
 To use the latest release of Rustronomy-watershed in a cargo project, add the rustronomy-watershed crate as a dependency to your `Cargo.toml` file:
 ```toml
 [dependencies]
-rustronomy-watershed = "0.3"
+rustronomy-watershed = "0.3.2"
 ```
 To use Rustronomy-fits in a Jupyter notebook, execute a cell containing the following code:
 ```rust
-:dep rustronomy-watershed = {version = "0.3"}
+:dep rustronomy-watershed = {version = "0.3.2"}
 ```
 
 > Please do not use any versions before 0.3, as they contain a major bug in the implementation of the merging watershed algorithm
