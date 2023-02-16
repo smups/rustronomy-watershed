@@ -1366,7 +1366,10 @@ impl Watershed for MergingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else { output.view() },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -1572,7 +1575,10 @@ impl Watershed for MergingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else { output.view() },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
