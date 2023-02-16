@@ -906,7 +906,7 @@ impl TransformBuilder {
   #[cfg(feature = "plots")]
   /// Set a custom colour map to be used by `plotters` when generating images
   /// of the watershed transform.
-  pub fn set_plot_colour_map(
+  pub const fn set_plot_colour_map(
     mut self,
     colour_map: fn(
       count: usize,
