@@ -1667,9 +1667,31 @@ pub struct SegmentingWatershed {
 
 impl Watershed for SegmentingWatershed {
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else { [input.shape()[0], input.shape()[1]] };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input = if self.edge_correction {
+      Some(nd::Array2::<u8>::zeros(shape))
+    } else { None };
+    let input = if self.edge_correction {      
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+      )
+        .and(input)
+        .into_par_iter()
+        .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else { input.reborrow() };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1770,7 +1792,10 @@ impl Watershed for SegmentingWatershed {
       #[cfg(feature = "plots")]
       if let Some(ref path) = self.plot_path {
         if let Err(err) = plotting::plot_slice(
-          output.view(),
+          if self.edge_correction {
+            //Do not plot the edge correction padding
+            output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+          } else { output.view() },
           &path.join(&format!("ws_lvl{water_level}.png")),
           self.plot_colour_map,
         ) {
@@ -1798,11 +1823,10 @@ impl Watershed for SegmentingWatershed {
       }
     });
 
-    //(5) Colour the edges of the image
-
-
-    //Return transform of image
-    return output;
+    //Return transform of image, taking into account the edge correction padding
+    if self.edge_correction {
+      output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned()
+    } else { output }
   }
 
   fn transform_to_list(
@@ -1810,9 +1834,31 @@ impl Watershed for SegmentingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else { [input.shape()[0], input.shape()[1]] };
     let mut output = nd::Array2::<usize>::zeros(shape);
+
+    //(1b) reshape the input image if necessary
+    let mut padded_input = if self.edge_correction {
+      Some(nd::Array2::<u8>::zeros(shape))
+    } else { None };
+    let input = if self.edge_correction {      
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+      )
+        .and(input)
+        .into_par_iter()
+        .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else { input.reborrow() };
 
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
@@ -1928,7 +1974,10 @@ impl Watershed for SegmentingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else { output.view() },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -1966,16 +2015,35 @@ impl Watershed for SegmentingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1) make an image for holding the different water colours
-    let shape = [input.shape()[0], input.shape()[1]];
+    //(1a) make an image for holding the different water colours
+    let shape = if self.edge_correction {
+      //If the edge correction is enabled, we have to pad the input with a 1px
+      //wide border, which increases the size shape of the output image by two
+      [input.shape()[0] + 2, input.shape()[1] + 2]
+    } else { [input.shape()[0], input.shape()[1]] };
     let mut output = nd::Array2::<usize>::zeros(shape);
 
+    //(1b) reshape the input image if necessary
+    let mut padded_input = if self.edge_correction {
+      Some(nd::Array2::<u8>::zeros(shape))
+    } else { None };
+    let input = if self.edge_correction {      
+      //Copy the input pixel values into the new padded image
+      nd::Zip::from(
+        padded_input
+          .as_mut()
+          .expect("corrected_input was None, which should be impossible. Please report this bug.")
+          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+      )
+        .and(input)
+        .into_par_iter()
+        .for_each(|(a, &b)| *a = b);
+      padded_input.as_ref().unwrap().view()
+    } else { input.reborrow() };
+
     //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len(), but which seed gets which
-    // colour should be random, so we shuffle the vec.
-    // One important excpetion is the zeroth element. It should be set to zero
-    let mut colours: Vec<usize> = seeds.iter().enumerate().map(|(idx, _)| idx + 1).collect();
-    colours.shuffle(&mut rand::thread_rng());
+    // The colours should range from 1 to seeds.len()
+    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -2074,7 +2142,10 @@ impl Watershed for SegmentingWatershed {
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
           if let Err(err) = plotting::plot_slice(
-            output.view(),
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else { output.view() },
             &path.join(&format!("ws_lvl{water_level}.png")),
             self.plot_colour_map,
           ) {
@@ -2101,8 +2172,11 @@ impl Watershed for SegmentingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, image) pair
-        (water_level, output.clone())
+        //(vi) Yield a (water_level, image) pair, taking into account the padding
+        //of the input image
+        if self.edge_correction {
+          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
+        } else { (water_level, output.clone()) }
       })
       .collect()
   }
