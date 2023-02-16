@@ -1,4 +1,4 @@
-#  Copyright© 2022 Raúl Wolters(1)
+#  Copyright© 2023 Raúl Wolters(1)
 #
 #  This file is part of rustronomy-watershed.
 #
@@ -19,7 +19,7 @@
 
 [package]
 name = "rustronomy-watershed"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 readme = "./README.md"
 license = "EUPL-1.2"
