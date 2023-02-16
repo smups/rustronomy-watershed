@@ -846,6 +846,13 @@ use plotters::prelude::*;
 /// can be used to specify folder where the generated images should be placed. If
 /// no output folder is specified when the `plots` feature is enabled, no plots will
 /// be generated (code will still compile).
+/// 
+/// ## `enable_edge_correction`
+/// Calling the `enable_edge_correction` method on the builder signals the
+/// watershed implementations that they should make sure that the edges of the
+/// image are properly included in the watershed transform. This option is disabled
+/// by default since performing this "edge correction" can incur a significant
+/// performance/memory usage hit.
 pub struct TransformBuilder {
   //Plotting options
   #[cfg(feature = "plots")]
