@@ -19,7 +19,7 @@
 
 [package]
 name = "rustronomy-watershed"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 readme = "./README.md"
 license = "EUPL-1.2"
