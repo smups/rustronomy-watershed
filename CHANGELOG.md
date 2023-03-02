@@ -2,6 +2,13 @@
 ![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # rustronomy-watershed changelog
 
+## v0.3.3
+_This version is a bugfix update_
+
+Bugfixes:
+- `pre_processor_with_max` now maps negative infinity floats to the special
+`ALWAYS_FILL` value (as intended) instead of the `NEVER_FILL` value. 
+
 ## v0.3.2
 _This version adds a new feature, but does not break the existing API and is
 therefore marked as minor._
