@@ -1080,7 +1080,7 @@ pub trait WatershedUtils {
         //Clamp value to [0,1] range and then to [0, u8::MAX)
         let normal = (float - min) / (max - min);
         (normal * MAX as f64).to_u8().unwrap()
-      } else if float.is_infinite() && !float.is_nan() {
+      } else if float.is_infinite() && !float.is_sign_negative() {
         //negative infinity, always fill
         ALWAYS_FILL
       } else {
