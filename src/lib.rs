@@ -830,6 +830,23 @@ pub mod plotting {
 #[cfg(feature = "plots")]
 use plotters::prelude::*;
 
+#[derive(Clone)]
+pub struct HookCtx<'a> {
+  pub image: nd::ArrayView2<'a, u8>,
+  pub colours: nd::ArrayView2<'a, usize>,
+  pub seeds: &'a [(usize, (usize, usize))]
+}
+
+impl<'a> HookCtx<'a> {
+  fn ctx(
+    image: nd::ArrayView2<'a, u8>,
+    colours: nd::ArrayView2<'a, usize>,
+    seeds: &'a [(usize, (usize, usize))]
+  ) -> Self {
+    HookCtx { image, colours, seeds }
+  }
+}
+
 #[derive(Clone, Default)]
 /// Builder for configuring a watershed transform.
 ///
@@ -868,7 +885,7 @@ pub struct TransformBuilder {
   edge_correction: bool,
 
   //Hooks
-  wlvl_hook: Option<fn (nd::ArrayView2<usize>)>
+  wlvl_hook: Option<fn (HookCtx)>
 }
 
 impl TransformBuilder {
@@ -917,7 +934,9 @@ impl TransformBuilder {
 
   /// Sets the water level hook. This function pointer is called every time the
   /// water level is raised and may be used to implement custom statistics.
-  pub const fn set_wlvl_hook(mut self, hook: fn (nd::ArrayView2<usize>)) -> Self {
+  /// Implementations of the watershed algorithm that do no visit all water levels
+  /// are not guaranteed to call this hook at all.
+  pub const fn set_wlvl_hook(mut self, hook: fn (HookCtx)) -> Self {
     self.wlvl_hook = Some(hook);
     self
   }
@@ -1230,7 +1249,7 @@ pub struct MergingWatershed {
   edge_correction: bool,
 
   //Hooks
-  wlvl_hook: Option<fn (nd::ArrayView2<usize>)>
+  wlvl_hook: Option<fn (HookCtx)>
 }
 
 impl Watershed for MergingWatershed {
@@ -1239,7 +1258,7 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
-    //(1a) make an image for holding the different water colours
+    //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
       //wide border, which increases the size shape of the output image by two
@@ -1271,6 +1290,11 @@ impl Watershed for MergingWatershed {
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
     let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
+    let seed_colours: Vec<_> = colours
+      .iter()
+      .zip(seeds.iter())
+      .map(|(col, (x, z))| (*col, (*x, *z)))
+      .collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1432,7 +1456,12 @@ impl Watershed for MergingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, lakesizes) pair
+        //(vi) Execute hook (if one is provided)
+        if let Some(hook) = self.wlvl_hook {
+          hook(HookCtx::ctx(input.view(), output.view(), &seed_colours))
+        };
+
+        //(vii) Yield a (water_level, lakesizes) pair
         (water_level, lake_sizes)
       })
       .collect()
