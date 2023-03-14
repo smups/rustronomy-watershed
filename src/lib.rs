@@ -830,7 +830,7 @@ pub mod plotting {
 #[cfg(feature = "plots")]
 use plotters::prelude::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 /// Builder for configuring a watershed transform.
 ///
 /// Use the `new_segmenting()` associated function to start configuring a
@@ -866,32 +866,37 @@ pub struct TransformBuilder {
   segmenting: bool,
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn (nd::ArrayView2<usize>)>
 }
 
 impl TransformBuilder {
   /// creates a new `TransformBuilder` configured for a segmenting transform
   pub const fn new_segmenting() -> Self {
     TransformBuilder {
-      segmenting: true,
-      max_water_level: NORMAL_MAX,
-      edge_correction: false,
       #[cfg(feature = "plots")]
       plot_path: None,
       #[cfg(feature = "plots")]
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
+      segmenting: true,
+      max_water_level: NORMAL_MAX,
+      edge_correction: false,
+      wlvl_hook: None,
     }
   }
 
   /// creates a new `TransformBuilder` configured for a merging transform
   pub const fn new_merging() -> Self {
     TransformBuilder {
-      segmenting: false,
-      max_water_level: NORMAL_MAX,
-      edge_correction: false,
       #[cfg(feature = "plots")]
       plot_path: None,
       #[cfg(feature = "plots")]
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
+      segmenting: false,
+      max_water_level: NORMAL_MAX,
+      edge_correction: false,
+      wlvl_hook: None,
     }
   }
 
@@ -907,6 +912,13 @@ impl TransformBuilder {
   /// full-image copies.
   pub const fn enable_edge_correction(mut self) -> Self {
     self.edge_correction = true;
+    self
+  }
+
+  /// Sets the water level hook. This function pointer is called every time the
+  /// water level is raised and may be used to implement custom statistics.
+  pub const fn set_wlvl_hook(mut self, hook: fn (nd::ArrayView2<usize>)) -> Self {
+    self.wlvl_hook = Some(hook);
     self
   }
 
@@ -965,7 +977,7 @@ impl TransformBuilder {
   }
 
   #[cfg(not(feature = "plots"))]
-  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
+  /// Build a `Box<dyn Watershed>` from the current builder
   /// configuration. This function will currently **never** return an `Err`
   /// variant and can be safely unwrapped.
   pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
@@ -978,6 +990,7 @@ impl TransformBuilder {
       Ok(Box::new(MergingWatershed {
         max_water_level: self.max_water_level,
         edge_correction: self.edge_correction,
+        wlvl_hook: self.wlvl_hook,
       }))
     }
   }
@@ -1215,6 +1228,9 @@ pub struct MergingWatershed {
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn (nd::ArrayView2<usize>)>
 }
 
 impl Watershed for MergingWatershed {
