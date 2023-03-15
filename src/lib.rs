@@ -944,7 +944,7 @@ impl<T> TransformBuilder<T> {
       #[cfg(feature = "plots")]
       plot_path: None,
       #[cfg(feature = "plots")]
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
+      plot_colour_map: None,
       max_water_level: NORMAL_MAX,
       edge_correction: false,
       wlvl_hook: None,
@@ -1014,7 +1014,7 @@ impl<T> TransformBuilder<T> {
       #[cfg(feature = "plots")]
       plot_path: self.plot_path,
       #[cfg(feature = "plots")]
-      plot_colour_map: self.plot_colour_map,
+      plot_colour_map: self.plot_colour_map.unwrap_or(plotting::viridis),
 
       //Required options
       max_water_level: self.max_water_level,
@@ -1040,7 +1040,7 @@ impl<T> TransformBuilder<T> {
       #[cfg(feature = "plots")]
       plot_path: self.plot_path,
       #[cfg(feature = "plots")]
-      plot_colour_map: self.plot_colour_map,
+      plot_colour_map: self.plot_colour_map.unwrap_or(plotting::viridis),
 
       //Required options
       max_water_level: self.max_water_level,
@@ -1319,7 +1319,7 @@ impl<T> MergingWatershed<T> {
   fn clone_with_hook<U>(&self, hook: fn(HookCtx) -> U) -> MergingWatershed<U> {
     MergingWatershed {
       #[cfg(feature = "plots")]
-      plot_path: self.plot_path,
+      plot_path: self.plot_path.clone(),
       #[cfg(feature = "plots")]
       plot_colour_map: self.plot_colour_map,
       max_water_level: self.max_water_level,
@@ -1629,7 +1629,7 @@ impl<T> SegmentingWatershed<T> {
   fn clone_with_hook<U>(&self, hook: fn(HookCtx) -> U) -> SegmentingWatershed<U> {
     SegmentingWatershed {
       #[cfg(feature = "plots")]
-      plot_path: self.plot_path,
+      plot_path: self.plot_path.clone(),
       #[cfg(feature = "plots")]
       plot_colour_map: self.plot_colour_map,
       max_water_level: self.max_water_level,
