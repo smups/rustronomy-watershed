@@ -1422,21 +1422,6 @@ impl<T> Watershed<T> for MergingWatershed<T> {
           perf.merge_ms = merge_start.elapsed().as_millis() as usize;
         }
 
-        //(ii) Count the number and size of lakes
-        let lake_sizes: Vec<usize> = {
-          #[cfg(feature = "debug")]
-          let count_start = std::time::Instant::now();
-          let mut lake_sizes = vec![0usize; colours.len() + 1];
-          output.iter().for_each(|&x| {
-            *lake_sizes.get_mut(x).unwrap() += 1;
-          });
-          #[cfg(feature = "debug")]
-          {
-            perf.lake_count_ms = count_start.elapsed().as_millis() as usize;
-          }
-          lake_sizes //<- return
-        };
-
         //(iii) Plot current state of the watershed transform
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
@@ -1497,7 +1482,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) give all pixels except the edge a different colour
-    output.slice_mut(nd::s![1..shape[0] - 1, 1..shape[1] - 1]).mapv_inplace(|px| 123);
+    output.slice_mut(nd::s![1..shape[0] - 1, 1..shape[1] - 1]).mapv_inplace(|_| 123);
 
     //Return the transformed image
     return output;
@@ -1509,7 +1494,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let mut proper_transform =
+    let proper_transform =
       self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
 
     //(2) Perform transform with new hook
@@ -1522,7 +1507,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, Vec<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let mut proper_transform = self.clone_with_hook(find_lake_sizes);
+    let proper_transform = self.clone_with_hook(find_lake_sizes);
 
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
