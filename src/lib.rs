@@ -1211,6 +1211,10 @@ pub trait Watershed<T = ()> {
   /// Returns watershed transform of input image.
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
 
+  /// Runs the watershed transform, executing the hook specified by the
+  /// `TransformBuilder` (if there is one) each time the water level is raised.
+  /// The results from running the hook each time are collected into a vec and
+  /// returned by this function.
   fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T>;
 
   /// Returns a Vec containing the areas of all the lakes per water level. The
