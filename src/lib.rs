@@ -834,14 +834,14 @@ use plotters::prelude::*;
 pub struct HookCtx<'a> {
   pub image: nd::ArrayView2<'a, u8>,
   pub colours: nd::ArrayView2<'a, usize>,
-  pub seeds: &'a [(usize, (usize, usize))]
+  pub seeds: &'a [(usize, (usize, usize))],
 }
 
 impl<'a> HookCtx<'a> {
   fn ctx(
     image: nd::ArrayView2<'a, u8>,
     colours: nd::ArrayView2<'a, usize>,
-    seeds: &'a [(usize, (usize, usize))]
+    seeds: &'a [(usize, (usize, usize))],
   ) -> Self {
     HookCtx { image, colours, seeds }
   }
@@ -863,14 +863,14 @@ impl<'a> HookCtx<'a> {
 /// can be used to specify folder where the generated images should be placed. If
 /// no output folder is specified when the `plots` feature is enabled, no plots will
 /// be generated (code will still compile).
-/// 
+///
 /// ## `enable_edge_correction`
 /// Calling the `enable_edge_correction` method on the builder signals the
 /// watershed implementations that they should make sure that the edges of the
 /// image are properly included in the watershed transform. This option is disabled
 /// by default since performing this "edge correction" can incur a significant
 /// performance/memory usage hit.
-pub struct TransformBuilder {
+pub struct TransformBuilder<T> {
   //Plotting options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -885,10 +885,10 @@ pub struct TransformBuilder {
   edge_correction: bool,
 
   //Hooks
-  wlvl_hook: Option<fn (HookCtx)>
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl TransformBuilder {
+impl<T> TransformBuilder<T> {
   /// creates a new `TransformBuilder` configured for a segmenting transform
   pub const fn new_segmenting() -> Self {
     TransformBuilder {
@@ -936,7 +936,7 @@ impl TransformBuilder {
   /// water level is raised and may be used to implement custom statistics.
   /// Implementations of the watershed algorithm that do no visit all water levels
   /// are not guaranteed to call this hook at all.
-  pub const fn set_wlvl_hook(mut self, hook: fn (HookCtx)) -> Self {
+  pub const fn set_wlvl_hook(mut self, hook: fn(HookCtx) -> T) -> Self {
     self.wlvl_hook = Some(hook);
     self
   }
@@ -999,19 +999,12 @@ impl TransformBuilder {
   /// Build a `Box<dyn Watershed>` from the current builder
   /// configuration. This function will currently **never** return an `Err`
   /// variant and can be safely unwrapped.
-  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
-    if self.segmenting {
-      Ok(Box::new(SegmentingWatershed {
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction,
-      }))
-    } else {
-      Ok(Box::new(MergingWatershed {
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction,
-        wlvl_hook: self.wlvl_hook,
-      }))
-    }
+  pub fn build_merging(self) -> Result<MergingWatershed<T>, String> {
+    Ok(MergingWatershed {
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+      wlvl_hook: self.wlvl_hook,
+    })
   }
 }
 
@@ -1150,7 +1143,7 @@ pub trait WatershedUtils {
 /// Actual trait for performing the watershed transform. It is implemented in
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
-pub trait Watershed {
+pub trait Watershed<T = ()> {
   /// Returns watershed transform of input image.
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
 
@@ -1158,11 +1151,7 @@ pub trait Watershed {
   /// length of the nested Vec is always equal to the number of seeds, although
   /// some lakes may have zero area (especially for the merging transform,
   /// see docs for `MergingWatershed`)
-  fn transform_to_list(
-    &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
-  ) -> Vec<(u8, Vec<usize>)>;
+  fn transform_to_list(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T>;
 
   /// Returns a list of images where each image corresponds to a snapshot of the
   /// watershed transform at a particular water level.
@@ -1177,9 +1166,6 @@ pub trait Watershed {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)>;
 }
-
-impl WatershedUtils for dyn Watershed {}
-impl WatershedUtils for dyn Watershed + Send + Sync {}
 
 /// Implementation of the merging watershed algorithm.
 ///
@@ -1231,14 +1217,14 @@ impl WatershedUtils for dyn Watershed + Send + Sync {}
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
-/// 
+///
 /// A workaround can be enabled by calling `enable_edge_correction` on the
 /// `TransformBuilder`. Enabling this setting copies the input image into a
 /// new array, 1px wider on all sides. This padded array is then used as the
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct MergingWatershed {
+pub struct MergingWatershed<T> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -1249,15 +1235,11 @@ pub struct MergingWatershed {
   edge_correction: bool,
 
   //Hooks
-  wlvl_hook: Option<fn (HookCtx)>
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl Watershed for MergingWatershed {
-  fn transform_to_list(
-    &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
-  ) -> Vec<(u8, Vec<usize>)> {
+impl<T> Watershed<T> for MergingWatershed<T> {
+  fn transform_to_list(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T> {
     //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
@@ -1290,11 +1272,8 @@ impl Watershed for MergingWatershed {
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
     let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
-    let seed_colours: Vec<_> = colours
-      .iter()
-      .zip(seeds.iter())
-      .map(|(col, (x, z))| (*col, (*x, *z)))
-      .collect();
+    let seed_colours: Vec<_> =
+      colours.iter().zip(seeds.iter()).map(|(col, (x, z))| (*col, (*x, *z))).collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1459,10 +1438,7 @@ impl Watershed for MergingWatershed {
         //(vi) Execute hook (if one is provided)
         if let Some(hook) = self.wlvl_hook {
           hook(HookCtx::ctx(input.view(), output.view(), &seed_colours))
-        };
-
-        //(vii) Yield a (water_level, lakesizes) pair
-        (water_level, lake_sizes)
+        }
       })
       .collect()
   }
@@ -1723,7 +1699,7 @@ impl Watershed for MergingWatershed {
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
-/// 
+///
 /// A workaround can be enabled by calling `enable_edge_correction` on the
 /// `TransformBuilder`. Enabling this setting copies the input image into a
 /// new array, 1px wider on all sides. This padded array is then used as the
