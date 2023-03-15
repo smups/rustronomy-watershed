@@ -1104,6 +1104,7 @@ pub trait WatershedUtils {
   /// `1..u8::MAX-1`, like so:
   /// ```rust
   /// use rustronomy_watershed::prelude::*;
+  /// use ndarray as nd;
   /// use ndarray_rand::{rand_distr::Uniform, RandomExt};
   ///
   /// //Set custom maximum waterlevel
@@ -1119,12 +1120,12 @@ pub trait WatershedUtils {
   ///     .unwrap();
   ///
   /// //Run pre-processor (using turbofish syntax)
-  /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
+  /// let rf = watershed.pre_processor_with_max::<{MY_MAX}, _, _>(rf.view());
   ///
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
   /// //Execute the watershed transform
-  /// let output = watershed.transform(rf.view(), &rf_mins)
+  /// let output = watershed.transform(rf.view(), &rf_mins);
   /// ```
   ///
   /// # panics
