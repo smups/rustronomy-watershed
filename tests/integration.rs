@@ -1,5 +1,5 @@
 /*
-  Copyright© 2022 Raúl Wolters(1)
+  Copyright© 2023 Raúl Wolters(1)
 
   This file is part of rustronomy-core.
 
@@ -128,11 +128,11 @@ fn test_merging_uniform() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //find minima
@@ -161,10 +161,10 @@ fn test_segmenting_uniform() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //find minima
@@ -193,11 +193,11 @@ fn test_merging_poisson() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //run pre-processor and find minima
@@ -227,10 +227,10 @@ fn test_segmenting_poisson() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //run pre-processor and find minima
@@ -271,11 +271,11 @@ fn test_merging_real() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //run pre-processor and find minima
@@ -316,10 +316,10 @@ fn test_segmenting_real() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //run pre-processor and find minima
@@ -360,11 +360,11 @@ fn test_merging_real_with_nan() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //run pre-processor and find minima
@@ -405,10 +405,10 @@ fn test_segmenting_real_with_nan() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //run pre-processor and find minima
@@ -435,11 +435,11 @@ fn test_merging_gaussian() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //run pre-processor and find minima
@@ -478,10 +478,10 @@ fn test_segmenting_gaussian() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //run pre-processor and find minima
@@ -534,11 +534,11 @@ fn test_merging_real_smoothed() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_merging()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
     .enable_edge_correction()
-    .build()
+    .build_merging()
     .unwrap();
 
   //run pre-processor and find minima
@@ -579,10 +579,10 @@ fn test_segmenting_real_smoothed() {
   if !root.exists() {
     std::fs::create_dir(&root).unwrap();
   }
-  let watershed = TransformBuilder::new_segmenting()
+  let watershed = TransformBuilder::default()
     .set_plot_folder(&root)
     .set_plot_colour_map(cmap)
-    .build()
+    .build_segmenting()
     .unwrap();
 
   //run pre-processor and find minima
