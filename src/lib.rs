@@ -1170,7 +1170,11 @@ pub trait Watershed<T = ()> {
   /// length of the nested Vec is always equal to the number of seeds, although
   /// some lakes may have zero area (especially for the merging transform,
   /// see docs for `MergingWatershed`)
-  fn transform_to_list(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<(u8, Vec<usize>)>;
+  fn transform_to_list(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, Vec<usize>)>;
 
   /// Returns a list of images where each image corresponds to a snapshot of the
   /// watershed transform at a particular water level.
@@ -1266,7 +1270,7 @@ impl<T> MergingWatershed<T> {
       plot_colour_map: self.plot_colour_map,
       max_water_level: self.max_water_level,
       edge_correction: self.edge_correction,
-      wlvl_hook: Some(hook)
+      wlvl_hook: Some(hook),
     }
   }
 }
@@ -1469,7 +1473,9 @@ impl<T> Watershed<T> for MergingWatershed<T> {
         }
 
         //(vi) Execute hook (if one is provided)
-        self.wlvl_hook.and_then(|hook| Some(hook(HookCtx::ctx(input.view(), output.view(), &seed_colours))))
+        self
+          .wlvl_hook
+          .and_then(|hook| Some(hook(HookCtx::ctx(input.view(), output.view(), &seed_colours))))
       })
       .filter_map(|x| x)
       .collect()
@@ -1495,18 +1501,21 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let mut proper_transform = self.clone_with_hook(
-      |ctx| (ctx.water_level, ctx.colours.to_owned())
-    );
-    
+    let mut proper_transform =
+      self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
+
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
   }
 
-  fn transform_to_list(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<(u8, Vec<usize>)> {
+  fn transform_to_list(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, Vec<usize>)> {
     //(1) Make a copy of self with the appropriate hook
     let mut proper_transform = self.clone_with_hook(find_lake_sizes);
-    
+
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
   }
