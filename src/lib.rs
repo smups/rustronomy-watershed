@@ -899,7 +899,6 @@ pub struct TransformBuilder<T> {
   >,
 
   //Basic transform options
-  segmenting: bool,
   max_water_level: u8,
   edge_correction: bool,
 
@@ -907,35 +906,37 @@ pub struct TransformBuilder<T> {
   wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
+#[derive(Debug, Clone)]
+/// Errors that may occur during the build process
+pub enum BuildErr {
+  MaxToHigh(u8),
+  MaxToLow(u8)
+}
+
+impl std::error::Error for BuildErr {}
+impl std::fmt::Display for BuildErr {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use BuildErr::*;
+    match self {
+      MaxToHigh(max) => write!(f, "Maximum water level set to {max}, which is higher than the maximum allowed value {NORMAL_MAX}"),
+      MaxToLow(max) => write!(f, "Maximum water level set to {max}, which is lower than the minimum allowed value {NEVER_FILL}")
+    }
+  }
+}
+
 impl<T> TransformBuilder<T> {
-  /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub const fn new_segmenting() -> Self {
+
+  pub const fn new() -> Self {
     TransformBuilder {
       #[cfg(feature = "plots")]
       plot_path: None,
       #[cfg(feature = "plots")]
       plot_colour_map: Some(plotting::viridis), //default map is Viridis
-      segmenting: true,
       max_water_level: NORMAL_MAX,
       edge_correction: false,
       wlvl_hook: None,
     }
   }
-
-  /// creates a new `TransformBuilder` configured for a merging transform
-  pub const fn new_merging() -> Self {
-    TransformBuilder {
-      #[cfg(feature = "plots")]
-      plot_path: None,
-      #[cfg(feature = "plots")]
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
-      segmenting: false,
-      max_water_level: NORMAL_MAX,
-      edge_correction: false,
-      wlvl_hook: None,
-    }
-  }
-
   /// Set the maximum water level that the transform will reach. Note that the
   /// maximum water level may not be set higher than `u8::MAX - 1` (254).
   pub const fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
@@ -984,44 +985,56 @@ impl<T> TransformBuilder<T> {
     self
   }
 
-  #[cfg(feature = "plots")]
-  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
-  /// configuration. This function may return an `Err` result if the builder
-  /// was not properly configured.
-  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
-    //Check if the max water level is not higher than than NORMAL MAX
+  #[cfg(not(feature = "plots"))]
+  /// Build a `MergingWatershed<T>` from the current builder
+  /// configuration.
+  pub fn build_merging(self) -> Result<MergingWatershed<T>, BuildErr> {
+    //Check if the max water level makes sense
     if self.max_water_level > NORMAL_MAX {
-      Err(format!(
-        "Max water level was set at {}, which is higher than the allowed maximum ({NORMAL_MAX}).",
-        self.max_water_level
-      ))?
+      Err(BuildErr::MaxToHigh(self.max_water_level))?
+    } else if self.max_water_level <= NEVER_FILL {
+      Err(BuildErr::MaxToLow(self.max_water_level))?
     }
 
-    if self.segmenting {
-      Ok(Box::new(SegmentingWatershed {
-        plot_path: self.plot_path,
-        plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction
-      }))
-    } else {
-      Ok(Box::new(MergingWatershed {
-        plot_path: self.plot_path,
-        plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction
-      }))
-    }
+    Ok(MergingWatershed {
+      //Plot options
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path,
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map,
+
+      //Required options
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+
+      //Hooks
+      wlvl_hook: self.wlvl_hook,
+    })
   }
 
   #[cfg(not(feature = "plots"))]
-  /// Build a `Box<dyn Watershed>` from the current builder
-  /// configuration. This function will currently **never** return an `Err`
-  /// variant and can be safely unwrapped.
-  pub fn build_merging(self) -> Result<MergingWatershed<T>, String> {
-    Ok(MergingWatershed {
+  /// Build a `SegmentingWatershed<T>` from the current builder
+  /// configuration.
+  pub fn build_segmenting(self) -> Result<SegmentingWatershed<T>, BuildErr> {
+    //Check if the max water level makes sense
+    if self.max_water_level > NORMAL_MAX {
+      Err(BuildErr::MaxToHigh(self.max_water_level))?
+    } else if self.max_water_level <= NEVER_FILL {
+      Err(BuildErr::MaxToLow(self.max_water_level))?
+    }
+
+    Ok(SegmentingWatershed {
+      //Plot options
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path,
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map,
+
+      //Required options
       max_water_level: self.max_water_level,
       edge_correction: self.edge_correction,
+
+      //Hooks
       wlvl_hook: self.wlvl_hook,
     })
   }
@@ -1256,6 +1269,8 @@ pub struct MergingWatershed<T> {
   #[cfg(feature = "plots")]
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
+  
+  //Required options
   max_water_level: u8,
   edge_correction: bool,
 
