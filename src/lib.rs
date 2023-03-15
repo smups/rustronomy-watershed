@@ -848,6 +848,7 @@ use plotters::prelude::*;
 #[derive(Clone)]
 pub struct HookCtx<'a> {
   pub water_level: u8,
+  pub max_water_level: u8,
   pub image: nd::ArrayView2<'a, u8>,
   pub colours: nd::ArrayView2<'a, usize>,
   pub seeds: &'a [(usize, (usize, usize))],
@@ -856,11 +857,12 @@ pub struct HookCtx<'a> {
 impl<'a> HookCtx<'a> {
   fn ctx(
     water_level: u8,
+    max_water_level: u8,
     image: nd::ArrayView2<'a, u8>,
     colours: nd::ArrayView2<'a, usize>,
     seeds: &'a [(usize, (usize, usize))],
   ) -> Self {
-    HookCtx { water_level, image, colours, seeds }
+    HookCtx { water_level, max_water_level, image, colours, seeds }
   }
 }
 
@@ -1474,7 +1476,13 @@ impl<T> Watershed<T> for MergingWatershed<T> {
 
         //(vi) Execute hook (if one is provided)
         self.wlvl_hook.and_then(|hook| {
-          Some(hook(HookCtx::ctx(water_level, input.view(), output.view(), &seed_colours)))
+          Some(hook(HookCtx::ctx(
+            water_level,
+            self.max_water_level,
+            input.view(),
+            output.view(),
+            &seed_colours,
+          )))
         })
       })
       .filter_map(|x| x)
@@ -1566,7 +1574,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct SegmentingWatershed {
+pub struct SegmentingWatershed<T> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -1575,11 +1583,28 @@ pub struct SegmentingWatershed {
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl Watershed for SegmentingWatershed {
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
-    //(1a) make an image for holding the different water colours
+impl<T> SegmentingWatershed<T> {
+  fn clone_with_hook<U>(&self, hook: fn(HookCtx) -> U) -> SegmentingWatershed<U> {
+    SegmentingWatershed {
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path,
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map,
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+      wlvl_hook: Some(hook),
+    }
+  }
+}
+
+impl<T> Watershed<T> for SegmentingWatershed<T> {
+  fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T> {
+    //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
       //wide border, which increases the size shape of the output image by two
@@ -1611,6 +1636,8 @@ impl Watershed for SegmentingWatershed {
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
     let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
+    let seed_colours: Vec<_> =
+      colours.iter().zip(seeds.iter()).map(|(col, (x, z))| (*col, (*x, *z))).collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1626,126 +1653,140 @@ impl Watershed for SegmentingWatershed {
     #[cfg(feature = "progress")]
     let bar = set_up_bar(self.max_water_level);
 
-    //(4) count lakes for all water levels
-    (0..self.max_water_level).into_iter().for_each(|water_level| {
-      //(logging) make a new perfreport
-      #[cfg(feature = "debug")]
-      let mut perf = crate::performance_monitoring::PerfReport::default();
-      #[cfg(feature = "debug")]
-      let loop_start = std::time::Instant::now();
+    //(4) increase water level to specified maximum
+    (0..=self.max_water_level)
+      .into_iter()
+      .map(|water_level| {
+        //(logging) make a new perfreport
+        #[cfg(feature = "debug")]
+        let mut perf = crate::performance_monitoring::PerfReport::default();
+        #[cfg(feature = "debug")]
+        let loop_start = std::time::Instant::now();
 
-      /*(i) Colour all flooded pixels connected to a source
-        We have to loop multiple times because there may be plateau's. These
-        require us to colour more than just one neighbouring pixel -> we need
-        to loop until there are no more uncoloured, flooded pixels connected to
-        a source left.
-      */
-      'colouring_loop: loop {
+        /*(i) Colour all flooded pixels connected to a source
+          We have to loop multiple times because there may be plateau's. These
+          require us to colour more than just one neighbouring pixel -> we need
+          to loop until there are no more uncoloured, flooded pixels connected to
+          a source left.
+        */
+        'colouring_loop: loop {
+          #[cfg(feature = "progress")]
+          {
+            bar.tick(); //Tick the progressbar
+          }
+          #[cfg(feature = "debug")]
+          {
+            perf.loops += 1;
+          }
+
+          #[cfg(feature = "debug")]
+          let iter_start = std::time::Instant::now();
+
+          /*(A) Find pixels to colour this iteration
+            We first look for all pixels that are uncoloured, flooded and directly
+            attached to a coloured pixel. We do this in parallel. We cannot, however,
+            change the pixel colours *and* look for pixels to colour at the same time.
+            That is why we collect all pixels to colour in a vector, and later update
+            the map.
+          */
+          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
+
+          #[cfg(feature = "debug")]
+          perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
+
+          /*(B) Colour pixels that we found in step (A)
+            If there are no pixels to be coloured anymore, we can break from this
+            loop and raise the water level
+          */
+          if pix_to_colour.is_empty() {
+            //No more connected, flooded pixels left -> raise water level
+            break 'colouring_loop;
+          } else {
+            //We have pixels to colour
+            #[cfg(feature = "debug")]
+            let colour_start = std::time::Instant::now();
+
+            pix_to_colour.into_iter().for_each(|(idx, col)| {
+              output[idx] = col;
+            });
+
+            #[cfg(feature = "debug")]
+            perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
+          }
+        }
+
+        /* (ii) Merge all touching regions
+          We do not do this for the segmenting transform!
+        */
+        #[cfg(feature = "debug")]
+        {
+          perf.merge_ms = 0;
+        }
+
+        //(iii) Plot current state of the watershed transform
+        #[cfg(feature = "plots")]
+        if let Some(ref path) = self.plot_path {
+          if let Err(err) = plotting::plot_slice(
+            if self.edge_correction {
+              //Do not plot the edge correction padding
+              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
+            } else {
+              output.view()
+            },
+            &path.join(&format!("ws_lvl{water_level}.png")),
+            self.plot_colour_map,
+          ) {
+            println!("Could not make watershed plot. Error: {err}")
+          }
+        }
+
+        //(iv) print performance report
+        #[cfg(all(feature = "debug", feature = "progress"))]
+        {
+          //In this combination we have a progress bar, we should use it to print
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
+          bar.println(format!("{perf}"));
+        }
+        #[cfg(all(feature = "debug", not(feature = "progress")))]
+        {
+          //We do not have a progress bar, so a plain println! will have to do
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
+          println!("{perf}");
+        }
+
+        //(v) Update progressbar and plot stuff
         #[cfg(feature = "progress")]
         {
-          bar.tick(); //Tick the progressbar
-        }
-        #[cfg(feature = "debug")]
-        {
-          perf.loops += 1;
+          bar.inc(1);
         }
 
-        #[cfg(feature = "debug")]
-        let iter_start = std::time::Instant::now();
+        //(vi) Execute hook (if one is provided)
+        self.wlvl_hook.and_then(|hook| {
+          Some(hook(HookCtx::ctx(
+            water_level,
+            self.max_water_level,
+            input.view(),
+            output.view(),
+            &seed_colours,
+          )))
+        })
+      })
+      .filter_map(|x| x)
+      .collect()
+  }
 
-        /*(A) Find pixels to colour this iteration
-          We first look for all pixels that are uncoloured, flooded and directly
-          attached to a coloured pixel. We do this in parallel. We cannot, however,
-          change the pixel colours *and* look for pixels to colour at the same time.
-          That is why we collect all pixels to colour in a vector, and later update
-          the map.
-        */
-        let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
-
-        #[cfg(feature = "debug")]
-        perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
-
-        /*(B) Colour pixels that we found in step (A)
-          If there are no pixels to be coloured anymore, we can break from this
-          loop and raise the water level
-        */
-        if pix_to_colour.is_empty() {
-          //No more connected, flooded pixels left -> raise water level
-          break 'colouring_loop;
-        } else {
-          /*We have pixels to colour
-            I have to discuss safety for a moment. Since we iterated over all
-            pixels and only allowed a pixel to set its own colour, we know that
-            there is at most one colour instruction per pixel. Since the pixels
-            do not overlap in memory, we can safely access each pixel concurrently.
-            To do this, I temporarily put the output watershed canvas in a global
-            static variable that can be accessed from any thread.
-          */
-          #[cfg(feature = "debug")]
-          let colour_start = std::time::Instant::now();
-
-          pix_to_colour.into_iter().for_each(|(idx, col)| {
-            output[idx] = col;
-          });
-
-          #[cfg(feature = "debug")]
-          perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
-        }
-      }
-
-      /* (ii) ¡DO NOT! Merge all touching regions
-        This is the main difference between the two algo's
-      */
-      #[cfg(feature = "debug")]
-      {
-        perf.merge_ms = 0; //by definition, since we're skipping this step
-      }
-
-      //(ii) DO NOT Count the number and size of lakes
-
-      //(iii) Plot current state of the watershed transform
-      #[cfg(feature = "plots")]
-      if let Some(ref path) = self.plot_path {
-        if let Err(err) = plotting::plot_slice(
-          if self.edge_correction {
-            //Do not plot the edge correction padding
-            output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
-          } else {
-            output.view()
-          },
-          &path.join(&format!("ws_lvl{water_level}.png")),
-          self.plot_colour_map,
-        ) {
-          println!("Could not make watershed plot. Error: {err}")
-        }
-      }
-
-      //(iv) print performance report
-      #[cfg(all(feature = "debug", feature = "progress"))]
-      {
-        //In this combination we have a progress bar, we should use it to print
-        perf.total_ms = loop_start.elapsed().as_millis() as usize;
-        bar.println(format!("{perf}"));
-      }
-      #[cfg(all(feature = "debug", not(feature = "progress")))]
-      {
-        //We do not have a progress bar, so a plain println! will have to do
-        println!("{perf}");
-      }
-
-      //(v) Update progressbar and plot stuff
-      #[cfg(feature = "progress")]
-      {
-        bar.inc(1);
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform = self.clone_with_hook(|ctx| {
+      if ctx.water_level == ctx.max_water_level {
+        Some(ctx.colours.to_owned())
+      } else {
+        None
       }
     });
 
-    //Return transform of image, taking into account the edge correction padding
-    if self.edge_correction {
-      output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned()
-    } else {
-      output
-    }
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)[0].as_ref().expect("no output?").clone()
   }
 
   fn transform_to_list(
