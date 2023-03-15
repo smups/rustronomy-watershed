@@ -1005,7 +1005,7 @@ impl<T> TransformBuilder<T> {
     //Check if the max water level makes sense
     if self.max_water_level > NORMAL_MAX {
       Err(BuildErr::MaxToHigh(self.max_water_level))?
-    } else if self.max_water_level <= NEVER_FILL {
+    } else if self.max_water_level <= ALWAYS_FILL {
       Err(BuildErr::MaxToLow(self.max_water_level))?
     }
 
