@@ -866,16 +866,37 @@ impl<'a> HookCtx<'a> {
   }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 /// Builder for configuring a watershed transform.
 ///
 /// Use the `new_segmenting()` associated function to start configuring a
-/// segmenting watershed transform. Use the `new_merging()` associated function
-/// to start configuring a merging watershed transform. Once you have enabled
-/// the desired functionality, a watershed transform object can be generated with
-/// the `build()` associated function. This returns a trait object of the type
-/// `Box<dyn Watershed + Send + Sync>, which can be shared between threads.
+/// segmenting watershed transform. Use the `default()` method to start configuring
+/// a watershed transform. Once you have enabled the desired functionality,
+/// a watershed transform struct can be generated with the `build_segmenting()`
+/// and `build_merging()` associated functions. These return a struct of the type
+/// `SegmentingWatershed` and `MergingWatershed` respectively, which can be
+/// shared between threads.
+/// 
+/// ## `default()` vs `new()` and custom hooks
+/// tl;dr: Use `new()` if you want to run a custom hook each time a the water
+/// level is raised during the watershed transform. Otherwise, use `default()`.
+/// 
+/// A `TransformBuilder` struct can be obtained with both the `default()` and
+/// `new()` functions implemented for both. The main difference between the two
+/// is the resulting type:
+/// - `default()` results in a `TransformBuilder<()>`
+/// - `new()` results in a `TransformBuilder<T>` 
+/// The default type for `T` is `()`. `T` is only used when specifying a custom
+/// function run by the watershed transform each time the water level is raised.
+/// This "hook" has the type `fn(HookCtx) -> T`.
+/// 
+/// Sadly, Rust is not able to determine that `T` should take the default `()`
+/// type if no hook is configured during the builder phase (which can be done with
+/// the `set_wlvl_hook` function). Therefore, `Default` is only implemented for
+/// `TransformBuilder<()>` (so not for all `T`) and can be used to circumvent this
+/// limitation of the type inference engine.
 ///
+/// ## `plots` feature
 /// Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
 /// struct: `set_plot_colour_map`, which can be used to set the colour map that
 /// will be used by `plotters` to generate the images and `set_plot_folder`, which
@@ -889,7 +910,7 @@ impl<'a> HookCtx<'a> {
 /// image are properly included in the watershed transform. This option is disabled
 /// by default since performing this "edge correction" can incur a significant
 /// performance/memory usage hit.
-pub struct TransformBuilder<T> {
+pub struct TransformBuilder<T = ()> {
   //Plotting options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -906,26 +927,17 @@ pub struct TransformBuilder<T> {
   wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-#[derive(Debug, Clone)]
-/// Errors that may occur during the build process
-pub enum BuildErr {
-  MaxToHigh(u8),
-  MaxToLow(u8)
-}
-
-impl std::error::Error for BuildErr {}
-impl std::fmt::Display for BuildErr {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    use BuildErr::*;
-    match self {
-      MaxToHigh(max) => write!(f, "Maximum water level set to {max}, which is higher than the maximum allowed value {NORMAL_MAX}"),
-      MaxToLow(max) => write!(f, "Maximum water level set to {max}, which is lower than the minimum allowed value {NEVER_FILL}")
-    }
+impl Default for TransformBuilder<()> {
+  fn default() -> Self {
+    TransformBuilder::new()
   }
 }
 
 impl<T> TransformBuilder<T> {
-
+  /// Creates a new instance of `TransformBuilder<T>` which can be used to
+  /// construct a watershed transform that runs custom code each time the water
+  /// level is raised. If you do not use this functionality, use `default()`
+  /// instead.
   pub const fn new() -> Self {
     TransformBuilder {
       #[cfg(feature = "plots")]
@@ -937,6 +949,7 @@ impl<T> TransformBuilder<T> {
       wlvl_hook: None,
     }
   }
+
   /// Set the maximum water level that the transform will reach. Note that the
   /// maximum water level may not be set higher than `u8::MAX - 1` (254).
   pub const fn set_max_water_lvl(mut self, max_water_lvl: u8) -> Self {
@@ -985,7 +998,6 @@ impl<T> TransformBuilder<T> {
     self
   }
 
-  #[cfg(not(feature = "plots"))]
   /// Build a `MergingWatershed<T>` from the current builder
   /// configuration.
   pub fn build_merging(self) -> Result<MergingWatershed<T>, BuildErr> {
@@ -1012,7 +1024,6 @@ impl<T> TransformBuilder<T> {
     })
   }
 
-  #[cfg(not(feature = "plots"))]
   /// Build a `SegmentingWatershed<T>` from the current builder
   /// configuration.
   pub fn build_segmenting(self) -> Result<SegmentingWatershed<T>, BuildErr> {
@@ -1037,6 +1048,24 @@ impl<T> TransformBuilder<T> {
       //Hooks
       wlvl_hook: self.wlvl_hook,
     })
+  }
+}
+
+#[derive(Debug, Clone)]
+/// Errors that may occur during the build process
+pub enum BuildErr {
+  MaxToHigh(u8),
+  MaxToLow(u8)
+}
+
+impl std::error::Error for BuildErr {}
+impl std::fmt::Display for BuildErr {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use BuildErr::*;
+    match self {
+      MaxToHigh(max) => write!(f, "Maximum water level set to {max}, which is higher than the maximum allowed value {NORMAL_MAX}"),
+      MaxToLow(max) => write!(f, "Maximum water level set to {max}, which is lower than the minimum allowed value {NEVER_FILL}")
+    }
   }
 }
 
@@ -1172,6 +1201,9 @@ pub trait WatershedUtils {
   }
 }
 
+impl<T> WatershedUtils for MergingWatershed<T> {}
+impl<T> WatershedUtils for SegmentingWatershed<T> {}
+
 /// Actual trait for performing the watershed transform. It is implemented in
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
@@ -1262,7 +1294,7 @@ pub trait Watershed<T = ()> {
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct MergingWatershed<T> {
+pub struct MergingWatershed<T = ()> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -1574,7 +1606,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct SegmentingWatershed<T> {
+pub struct SegmentingWatershed<T = ()> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
