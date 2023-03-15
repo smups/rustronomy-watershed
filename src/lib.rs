@@ -1329,7 +1329,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     let bar = set_up_bar(self.max_water_level);
 
     //(4) count lakes for all water levels
-    (0..self.max_water_level)
+    (0..=self.max_water_level)
       .into_iter()
       .map(|water_level| {
         //(logging) make a new perfreport
@@ -1798,5 +1798,5 @@ impl<T> Watershed<T> for SegmentingWatershed<T> {
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
   }
-  
+
 }
