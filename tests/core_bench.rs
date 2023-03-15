@@ -29,7 +29,7 @@ fn core_bench() {
   let rf = nd::Array2::<u8>::random((1024, 1024), Uniform::new(0, 254));
 
   //Set-up the watershed transform
-  let watershed = TransformBuilder::new_merging().build().unwrap();
+  let watershed = TransformBuilder::default().build_merging().unwrap();
 
   //Find minima of the random field (to be used as seeds)
   let rf_mins = watershed.find_local_minima(rf.view());
