@@ -624,6 +624,21 @@ fn test_recolour() {
   assert_eq!(answer, input);
 }
 
+#[inline]
+fn find_lake_sizes(ctx: HookCtx) -> (u8, Vec<usize>) {
+  #[cfg(feature = "debug")]
+  let count_start = std::time::Instant::now();
+  let mut lake_sizes = vec![0usize; ctx.colours.len() + 1];
+  ctx.colours.iter().for_each(|&x| {
+    *lake_sizes.get_mut(x).unwrap() += 1;
+  });
+  #[cfg(feature = "debug")]
+  {
+    perf.lake_count_ms = count_start.elapsed().as_millis() as usize;
+  }
+  (ctx.water_level, lake_sizes)
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                             OPTIONAL MODULES                               //
 ////////////////////////////////////////////////////////////////////////////////
@@ -1490,9 +1505,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
 
   fn transform_to_list(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<(u8, Vec<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let mut proper_transform = self.clone_with_hook(
-      todo!()
-    );
+    let mut proper_transform = self.clone_with_hook(find_lake_sizes);
     
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
