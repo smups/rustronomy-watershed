@@ -627,16 +627,10 @@ fn test_recolour() {
 
 #[inline]
 fn find_lake_sizes(ctx: HookCtx) -> (u8, Vec<usize>) {
-  #[cfg(feature = "debug")]
-  let count_start = std::time::Instant::now();
   let mut lake_sizes = vec![0usize; ctx.colours.len() + 1];
   ctx.colours.iter().for_each(|&x| {
     *lake_sizes.get_mut(x).unwrap() += 1;
   });
-  #[cfg(feature = "debug")]
-  {
-    perf.lake_count_ms = count_start.elapsed().as_millis() as usize;
-  }
   (ctx.water_level, lake_sizes)
 }
 
@@ -1119,9 +1113,9 @@ pub trait WatershedUtils {
   /// let rf = nd::Array2::<f64>::random((512, 512), Uniform::new(0.0, 1.0));
   ///
   /// //Set-up the watershed transform
-  /// let watershed = TransformBuilder::new_segmenting()
+  /// let watershed = TransformBuilder::default()
   ///     .set_max_water_lvl(MY_MAX)
-  ///     .build()
+  ///     .build_segmenting()
   ///     .unwrap();
   ///
   /// //Run pre-processor (using turbofish syntax)
