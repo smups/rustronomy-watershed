@@ -1473,9 +1473,9 @@ impl<T> Watershed<T> for MergingWatershed<T> {
         }
 
         //(vi) Execute hook (if one is provided)
-        self
-          .wlvl_hook
-          .and_then(|hook| Some(hook(HookCtx::ctx(input.view(), output.view(), &seed_colours))))
+        self.wlvl_hook.and_then(|hook| {
+          Some(hook(HookCtx::ctx(water_level, input.view(), output.view(), &seed_colours)))
+        })
       })
       .filter_map(|x| x)
       .collect()
