@@ -62,8 +62,9 @@
 //! the watershed transform before executing it. To configure a transform,
 //! create an instance of the `TransformBuilder` struct. Once you are done specifying
 //! options for the builder struct using its associated functions, call the
-//! `build()` function to generate a (`Sync`&`Send`) watershed transform object,
-//! which you can now use to execute the configured transform.
+//! `build_merging()` or `build_segmenting()` functions to generate a
+//! (`Sync`&`Send`) watershed transform struct, which you can now use to
+//! execute the configured transform.
 //!
 //! In this example, we compute the watershed transform of a uniform random field.
 //! The random field can be generated with the `ndarray_rand` crate. To configure a
@@ -77,7 +78,7 @@
 //! //Create a random uniform distribution
 //! let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
 //! //Set-up the watershed transform
-//! let watershed = TransformBuilder::new_segmenting().build().unwrap();
+//! let watershed = TransformBuilder::default().build_segmenting().unwrap();
 //! //Find minima of the random field (to be used as seeds)
 //! let rf_mins = watershed.find_local_minima(rf.view());
 //! //Execute the watershed transform
