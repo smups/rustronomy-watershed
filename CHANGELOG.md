@@ -2,6 +2,27 @@
 ![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # rustronomy-watershed changelog
 
+## v0.4.0
+*This version breaks the currently existing API*
+
+This version adds the ability to run custom code each time the water level is
+raised during the watershed transformation. This enables running customizable 
+code for data analysis purposes.
+
+Unfortunately, this feature addition required the following breaking API changes:
+- The `TransformBuilder` struct now has a generic field
+- The `TransformBuilder` struct no longer has `build`, `new_segmenting` and
+`new_merging` methods. They have been replaced by `new`, `default`
+`build_segmenting` and `build_merging`
+- The `Watershed` trait is no longer dyn-safe and also has a generic field
+
+The generic parameter in the new `Watershed` trait is the return type of the new
+custom hook that is ran each time the water level is raised. It has the default
+value `()`. Sadly rust is currently not able to infer the type of the generic
+parameter unless it is explicitly specified by using such a hook. To get around
+this limitation, you can use the `default()` method to start configuring the 
+`TransformBuilder`, which explicitly specifies the default type.
+
 ## v0.3.2
 _This version adds a new feature, but does not break the existing API and is
 therefore marked as minor._

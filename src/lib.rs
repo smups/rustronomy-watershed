@@ -62,8 +62,9 @@
 //! the watershed transform before executing it. To configure a transform,
 //! create an instance of the `TransformBuilder` struct. Once you are done specifying
 //! options for the builder struct using its associated functions, call the
-//! `build()` function to generate a (`Sync`&`Send`) watershed transform object,
-//! which you can now use to execute the configured transform.
+//! `build_merging()` or `build_segmenting()` functions to generate a
+//! (`Sync`&`Send`) watershed transform struct, which you can now use to
+//! execute the configured transform.
 //!
 //! In this example, we compute the watershed transform of a uniform random field.
 //! The random field can be generated with the `ndarray_rand` crate. To configure a
@@ -77,7 +78,7 @@
 //! //Create a random uniform distribution
 //! let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
 //! //Set-up the watershed transform
-//! let watershed = TransformBuilder::new_segmenting().build().unwrap();
+//! let watershed = TransformBuilder::default().build_segmenting().unwrap();
 //! //Find minima of the random field (to be used as seeds)
 //! let rf_mins = watershed.find_local_minima(rf.view());
 //! //Execute the watershed transform
@@ -624,6 +625,15 @@ fn test_recolour() {
   assert_eq!(answer, input);
 }
 
+#[inline]
+fn find_lake_sizes(ctx: HookCtx) -> (u8, Vec<usize>) {
+  let mut lake_sizes = vec![0usize; ctx.colours.len() + 1];
+  ctx.colours.iter().for_each(|&x| {
+    *lake_sizes.get_mut(x).unwrap() += 1;
+  });
+  (ctx.water_level, lake_sizes)
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //                             OPTIONAL MODULES                               //
 ////////////////////////////////////////////////////////////////////////////////
@@ -830,30 +840,72 @@ pub mod plotting {
 #[cfg(feature = "plots")]
 use plotters::prelude::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone)]
+pub struct HookCtx<'a> {
+  pub water_level: u8,
+  pub max_water_level: u8,
+  pub image: nd::ArrayView2<'a, u8>,
+  pub colours: nd::ArrayView2<'a, usize>,
+  pub seeds: &'a [(usize, (usize, usize))],
+}
+
+impl<'a> HookCtx<'a> {
+  fn ctx(
+    water_level: u8,
+    max_water_level: u8,
+    image: nd::ArrayView2<'a, u8>,
+    colours: nd::ArrayView2<'a, usize>,
+    seeds: &'a [(usize, (usize, usize))],
+  ) -> Self {
+    HookCtx { water_level, max_water_level, image, colours, seeds }
+  }
+}
+
+#[derive(Clone)]
 /// Builder for configuring a watershed transform.
 ///
 /// Use the `new_segmenting()` associated function to start configuring a
-/// segmenting watershed transform. Use the `new_merging()` associated function
-/// to start configuring a merging watershed transform. Once you have enabled
-/// the desired functionality, a watershed transform object can be generated with
-/// the `build()` associated function. This returns a trait object of the type
-/// `Box<dyn Watershed + Send + Sync>, which can be shared between threads.
+/// segmenting watershed transform. Use the `default()` method to start configuring
+/// a watershed transform. Once you have enabled the desired functionality,
+/// a watershed transform struct can be generated with the `build_segmenting()`
+/// and `build_merging()` associated functions. These return a struct of the type
+/// `SegmentingWatershed` and `MergingWatershed` respectively, which can be
+/// shared between threads.
+/// 
+/// ## `default()` vs `new()` and custom hooks
+/// tl;dr: Use `new()` if you want to run a custom hook each time a the water
+/// level is raised during the watershed transform. Otherwise, use `default()`.
+/// 
+/// A `TransformBuilder` struct can be obtained with both the `default()` and
+/// `new()` functions implemented for both. The main difference between the two
+/// is the resulting type:
+/// - `default()` results in a `TransformBuilder<()>`
+/// - `new()` results in a `TransformBuilder<T>` 
+/// The default type for `T` is `()`. `T` is only used when specifying a custom
+/// function run by the watershed transform each time the water level is raised.
+/// This "hook" has the type `fn(HookCtx) -> T`.
+/// 
+/// Sadly, Rust is not able to determine that `T` should take the default `()`
+/// type if no hook is configured during the builder phase (which can be done with
+/// the `set_wlvl_hook` function). Therefore, `Default` is only implemented for
+/// `TransformBuilder<()>` (so not for all `T`) and can be used to circumvent this
+/// limitation of the type inference engine.
 ///
+/// ## `plots` feature
 /// Enabling the `plots` feature gate adds two new methods to the `TransformBuilder`
 /// struct: `set_plot_colour_map`, which can be used to set the colour map that
 /// will be used by `plotters` to generate the images and `set_plot_folder`, which
 /// can be used to specify folder where the generated images should be placed. If
 /// no output folder is specified when the `plots` feature is enabled, no plots will
 /// be generated (code will still compile).
-/// 
+///
 /// ## `enable_edge_correction`
 /// Calling the `enable_edge_correction` method on the builder signals the
 /// watershed implementations that they should make sure that the edges of the
 /// image are properly included in the watershed transform. This option is disabled
 /// by default since performing this "edge correction" can incur a significant
 /// performance/memory usage hit.
-pub struct TransformBuilder {
+pub struct TransformBuilder<T = ()> {
   //Plotting options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -863,35 +915,33 @@ pub struct TransformBuilder {
   >,
 
   //Basic transform options
-  segmenting: bool,
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl TransformBuilder {
-  /// creates a new `TransformBuilder` configured for a segmenting transform
-  pub const fn new_segmenting() -> Self {
-    TransformBuilder {
-      segmenting: true,
-      max_water_level: NORMAL_MAX,
-      edge_correction: false,
-      #[cfg(feature = "plots")]
-      plot_path: None,
-      #[cfg(feature = "plots")]
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
-    }
+impl Default for TransformBuilder<()> {
+  fn default() -> Self {
+    TransformBuilder::new()
   }
+}
 
-  /// creates a new `TransformBuilder` configured for a merging transform
-  pub const fn new_merging() -> Self {
+impl<T> TransformBuilder<T> {
+  /// Creates a new instance of `TransformBuilder<T>` which can be used to
+  /// construct a watershed transform that runs custom code each time the water
+  /// level is raised. If you do not use this functionality, use `default()`
+  /// instead.
+  pub const fn new() -> Self {
     TransformBuilder {
-      segmenting: false,
-      max_water_level: NORMAL_MAX,
-      edge_correction: false,
       #[cfg(feature = "plots")]
       plot_path: None,
       #[cfg(feature = "plots")]
-      plot_colour_map: Some(plotting::viridis), //default map is Viridis
+      plot_colour_map: None,
+      max_water_level: NORMAL_MAX,
+      edge_correction: false,
+      wlvl_hook: None,
     }
   }
 
@@ -907,6 +957,15 @@ impl TransformBuilder {
   /// full-image copies.
   pub const fn enable_edge_correction(mut self) -> Self {
     self.edge_correction = true;
+    self
+  }
+
+  /// Sets the water level hook. This function pointer is called every time the
+  /// water level is raised and may be used to implement custom statistics.
+  /// Implementations of the watershed algorithm that do no visit all water levels
+  /// are not guaranteed to call this hook at all.
+  pub const fn set_wlvl_hook(mut self, hook: fn(HookCtx) -> T) -> Self {
+    self.wlvl_hook = Some(hook);
     self
   }
 
@@ -934,51 +993,73 @@ impl TransformBuilder {
     self
   }
 
-  #[cfg(feature = "plots")]
-  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
-  /// configuration. This function may return an `Err` result if the builder
-  /// was not properly configured.
-  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
-    //Check if the max water level is not higher than than NORMAL MAX
+  /// Build a `MergingWatershed<T>` from the current builder
+  /// configuration.
+  pub fn build_merging(self) -> Result<MergingWatershed<T>, BuildErr> {
+    //Check if the max water level makes sense
     if self.max_water_level > NORMAL_MAX {
-      Err(format!(
-        "Max water level was set at {}, which is higher than the allowed maximum ({NORMAL_MAX}).",
-        self.max_water_level
-      ))?
+      Err(BuildErr::MaxToHigh(self.max_water_level))?
+    } else if self.max_water_level <= ALWAYS_FILL {
+      Err(BuildErr::MaxToLow(self.max_water_level))?
     }
 
-    if self.segmenting {
-      Ok(Box::new(SegmentingWatershed {
-        plot_path: self.plot_path,
-        plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction
-      }))
-    } else {
-      Ok(Box::new(MergingWatershed {
-        plot_path: self.plot_path,
-        plot_colour_map: self.plot_colour_map.ok_or("No colour map to be used for plotting of watershed transform was specified. This is a library bug.")?,
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction
-      }))
-    }
+    Ok(MergingWatershed {
+      //Plot options
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path,
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map.unwrap_or(plotting::viridis),
+
+      //Required options
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+
+      //Hooks
+      wlvl_hook: self.wlvl_hook,
+    })
   }
 
-  #[cfg(not(feature = "plots"))]
-  /// Build a `Box<dyn Watershed + Send + Sync>` from the current builder
-  /// configuration. This function will currently **never** return an `Err`
-  /// variant and can be safely unwrapped.
-  pub fn build(self) -> Result<Box<dyn Watershed + Send + Sync>, String> {
-    if self.segmenting {
-      Ok(Box::new(SegmentingWatershed {
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction,
-      }))
-    } else {
-      Ok(Box::new(MergingWatershed {
-        max_water_level: self.max_water_level,
-        edge_correction: self.edge_correction,
-      }))
+  /// Build a `SegmentingWatershed<T>` from the current builder
+  /// configuration.
+  pub fn build_segmenting(self) -> Result<SegmentingWatershed<T>, BuildErr> {
+    //Check if the max water level makes sense
+    if self.max_water_level > NORMAL_MAX {
+      Err(BuildErr::MaxToHigh(self.max_water_level))?
+    } else if self.max_water_level <= ALWAYS_FILL {
+      Err(BuildErr::MaxToLow(self.max_water_level))?
+    }
+
+    Ok(SegmentingWatershed {
+      //Plot options
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path,
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map.unwrap_or(plotting::viridis),
+
+      //Required options
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+
+      //Hooks
+      wlvl_hook: self.wlvl_hook,
+    })
+  }
+}
+
+#[derive(Debug, Clone)]
+/// Errors that may occur during the build process
+pub enum BuildErr {
+  MaxToHigh(u8),
+  MaxToLow(u8)
+}
+
+impl std::error::Error for BuildErr {}
+impl std::fmt::Display for BuildErr {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    use BuildErr::*;
+    match self {
+      MaxToHigh(max) => write!(f, "Maximum water level set to {max}, which is higher than the maximum allowed value {NORMAL_MAX}"),
+      MaxToLow(max) => write!(f, "Maximum water level set to {max}, which is lower than the minimum allowed value {NEVER_FILL}")
     }
   }
 }
@@ -1023,6 +1104,7 @@ pub trait WatershedUtils {
   /// `1..u8::MAX-1`, like so:
   /// ```rust
   /// use rustronomy_watershed::prelude::*;
+  /// use ndarray as nd;
   /// use ndarray_rand::{rand_distr::Uniform, RandomExt};
   ///
   /// //Set custom maximum waterlevel
@@ -1032,18 +1114,18 @@ pub trait WatershedUtils {
   /// let rf = nd::Array2::<f64>::random((512, 512), Uniform::new(0.0, 1.0));
   ///
   /// //Set-up the watershed transform
-  /// let watershed = TransformBuilder::new_segmenting()
+  /// let watershed = TransformBuilder::default()
   ///     .set_max_water_lvl(MY_MAX)
-  ///     .build()
+  ///     .build_segmenting()
   ///     .unwrap();
   ///
   /// //Run pre-processor (using turbofish syntax)
-  /// let rf = watershed.pre_processor_with_max::<{MYMAX}, _, _>(rf.view());
+  /// let rf = watershed.pre_processor_with_max::<{MY_MAX}, _, _>(rf.view());
   ///
   /// //Find minima of the random field (to be used as seeds)
   /// let rf_mins = watershed.find_local_minima(rf.view());
   /// //Execute the watershed transform
-  /// let output = watershed.transform(rf.view(), &rf_mins)
+  /// let output = watershed.transform(rf.view(), &rf_mins);
   /// ```
   ///
   /// # panics
@@ -1115,12 +1197,21 @@ pub trait WatershedUtils {
   }
 }
 
+impl<T> WatershedUtils for MergingWatershed<T> {}
+impl<T> WatershedUtils for SegmentingWatershed<T> {}
+
 /// Actual trait for performing the watershed transform. It is implemented in
 /// different ways by different versions of the algorithm. This trait is dyn-safe,
 /// which means that trait objects may be constructed from it.
-pub trait Watershed {
+pub trait Watershed<T = ()> {
   /// Returns watershed transform of input image.
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize>;
+
+  /// Runs the watershed transform, executing the hook specified by the
+  /// `TransformBuilder` (if there is one) each time the water level is raised.
+  /// The results from running the hook each time are collected into a vec and
+  /// returned by this function.
+  fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T>;
 
   /// Returns a Vec containing the areas of all the lakes per water level. The
   /// length of the nested Vec is always equal to the number of seeds, although
@@ -1145,9 +1236,6 @@ pub trait Watershed {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)>;
 }
-
-impl WatershedUtils for dyn Watershed {}
-impl WatershedUtils for dyn Watershed + Send + Sync {}
 
 /// Implementation of the merging watershed algorithm.
 ///
@@ -1199,31 +1287,46 @@ impl WatershedUtils for dyn Watershed + Send + Sync {}
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
-/// 
+///
 /// A workaround can be enabled by calling `enable_edge_correction` on the
 /// `TransformBuilder`. Enabling this setting copies the input image into a
 /// new array, 1px wider on all sides. This padded array is then used as the
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct MergingWatershed {
+pub struct MergingWatershed<T = ()> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
   #[cfg(feature = "plots")]
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
+  
+  //Required options
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl Watershed for MergingWatershed {
-  fn transform_to_list(
-    &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
-  ) -> Vec<(u8, Vec<usize>)> {
-    //(1a) make an image for holding the different water colours
+impl<T> MergingWatershed<T> {
+  fn clone_with_hook<U>(&self, hook: fn(HookCtx) -> U) -> MergingWatershed<U> {
+    MergingWatershed {
+      #[cfg(feature = "plots")]
+      plot_path: self.plot_path.clone(),
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map,
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+      wlvl_hook: Some(hook),
+    }
+  }
+}
+
+impl<T> Watershed<T> for MergingWatershed<T> {
+  fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T> {
+    //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
       //wide border, which increases the size shape of the output image by two
@@ -1255,6 +1358,8 @@ impl Watershed for MergingWatershed {
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
     let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
+    let seed_colours: Vec<_> =
+      colours.iter().zip(seeds.iter()).map(|(col, (x, z))| (*col, (*x, *z))).collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1271,7 +1376,7 @@ impl Watershed for MergingWatershed {
     let bar = set_up_bar(self.max_water_level);
 
     //(4) count lakes for all water levels
-    (0..self.max_water_level)
+    (0..=self.max_water_level)
       .into_iter()
       .map(|water_level| {
         //(logging) make a new perfreport
@@ -1364,21 +1469,6 @@ impl Watershed for MergingWatershed {
           perf.merge_ms = merge_start.elapsed().as_millis() as usize;
         }
 
-        //(ii) Count the number and size of lakes
-        let lake_sizes: Vec<usize> = {
-          #[cfg(feature = "debug")]
-          let count_start = std::time::Instant::now();
-          let mut lake_sizes = vec![0usize; colours.len() + 1];
-          output.iter().for_each(|&x| {
-            *lake_sizes.get_mut(x).unwrap() += 1;
-          });
-          #[cfg(feature = "debug")]
-          {
-            perf.lake_count_ms = count_start.elapsed().as_millis() as usize;
-          }
-          lake_sizes //<- return
-        };
-
         //(iii) Plot current state of the watershed transform
         #[cfg(feature = "plots")]
         if let Some(ref path) = self.plot_path {
@@ -1416,9 +1506,18 @@ impl Watershed for MergingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (water_level, lakesizes) pair
-        (water_level, lake_sizes)
+        //(vi) Execute hook (if one is provided)
+        self.wlvl_hook.and_then(|hook| {
+          Some(hook(HookCtx::ctx(
+            water_level,
+            self.max_water_level,
+            input.view(),
+            output.view(),
+            &seed_colours,
+          )))
+        })
       })
+      .filter_map(|x| x)
       .collect()
   }
 
@@ -1430,7 +1529,7 @@ impl Watershed for MergingWatershed {
     let mut output = nd::Array2::<usize>::zeros(shape);
 
     //(2) give all pixels except the edge a different colour
-    output.slice_mut(nd::s![1..shape[0] - 1, 1..shape[1] - 1]).mapv_inplace(|px| 123);
+    output.slice_mut(nd::s![1..shape[0] - 1, 1..shape[1] - 1]).mapv_inplace(|_| 123);
 
     //Return the transformed image
     return output;
@@ -1441,202 +1540,24 @@ impl Watershed for MergingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1a) make an image for holding the different water colours
-    let shape = if self.edge_correction {
-      //If the edge correction is enabled, we have to pad the input with a 1px
-      //wide border, which increases the size shape of the output image by two
-      [input.shape()[0] + 2, input.shape()[1] + 2]
-    } else {
-      [input.shape()[0], input.shape()[1]]
-    };
-    let mut output = nd::Array2::<usize>::zeros(shape);
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform =
+      self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
 
-    //(1b) reshape the input image if necessary
-    let mut padded_input =
-      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
-    let input = if self.edge_correction {
-      //Copy the input pixel values into the new padded image
-      nd::Zip::from(
-        padded_input
-          .as_mut()
-          .expect("corrected_input was None, which should be impossible. Please report this bug.")
-          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
-      )
-      .and(input)
-      .into_par_iter()
-      .for_each(|(a, &b)| *a = b);
-      padded_input.as_ref().unwrap().view()
-    } else {
-      input.reborrow()
-    };
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)
+  }
 
-    //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len()
-    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
+  fn transform_to_list(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, Vec<usize>)> {
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform = self.clone_with_hook(find_lake_sizes);
 
-    //Colour the starting pixels
-    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
-      output[idx] = col;
-    }
-    //Set the zeroth colour to UNCOLOURED!
-    colours.insert(UNCOLOURED, UNCOLOURED);
-
-    #[cfg(feature = "debug")]
-    println!("starting with {} lakes", colours.len());
-
-    //(3) set-up progress bar
-    #[cfg(feature = "progress")]
-    let bar = set_up_bar(self.max_water_level);
-
-    //(4) count lakes for all water levels
-    (0..self.max_water_level)
-      .into_iter()
-      .map(|water_level| {
-        //(logging) make a new perfreport
-        #[cfg(feature = "debug")]
-        let mut perf = crate::performance_monitoring::PerfReport::default();
-        #[cfg(feature = "debug")]
-        let loop_start = std::time::Instant::now();
-
-        /*(i) Colour all flooded pixels connected to a source
-          We have to loop multiple times because there may be plateau's. These
-          require us to colour more than just one neighbouring pixel -> we need
-          to loop until there are no more uncoloured, flooded pixels connected to
-          a source left.
-        */
-        'colouring_loop: loop {
-          #[cfg(feature = "progress")]
-          {
-            bar.tick(); //Tick the progressbar
-          }
-          #[cfg(feature = "debug")]
-          {
-            perf.loops += 1;
-          }
-
-          #[cfg(feature = "debug")]
-          let iter_start = std::time::Instant::now();
-
-          /*(A) Find pixels to colour this iteration
-            We first look for all pixels that are uncoloured, flooded and directly
-            attached to a coloured pixel. We do this in parallel. We cannot, however,
-            change the pixel colours *and* look for pixels to colour at the same time.
-            That is why we collect all pixels to colour in a vector, and later update
-            the map.
-          */
-          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
-
-          #[cfg(feature = "debug")]
-          perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
-
-          /*(B) Colour pixels that we found in step (A)
-            If there are no pixels to be coloured anymore, we can break from this
-            loop and raise the water level
-          */
-          if pix_to_colour.is_empty() {
-            //No more connected, flooded pixels left -> raise water level
-            break 'colouring_loop;
-          } else {
-            /*We have pixels to colour
-              I have to discuss safety for a moment. Since we iterated over all
-              pixels and only allowed a pixel to set its own colour, we know that
-              there is at most one colour instruction per pixel. Since the pixels
-              do not overlap in memory, we can safely access each pixel concurrently.
-              To do this, I temporarily put the output watershed canvas in a global
-              static variable that can be accessed from any thread.
-            */
-            #[cfg(feature = "debug")]
-            let colour_start = std::time::Instant::now();
-
-            pix_to_colour.into_iter().for_each(|(idx, col)| {
-              output[idx] = col;
-            });
-
-            #[cfg(feature = "debug")]
-            perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
-          }
-        }
-
-        /* (ii) Merge all touching regions
-          Now that we have coloured all colourable pixels, we have to start
-          merging regions of different colours that border each other
-          We do this by making a look-up table for the colours. Each colour can
-          look-up what its new colour will be.
-        */
-        #[cfg(feature = "debug")]
-        let merge_start = std::time::Instant::now();
-
-        //(A) Find all colours that have to be merged
-        let to_merge = find_merge(output.view());
-        let num_mergers = to_merge.len();
-
-        /*(B) construct a colour map
-          The colour map holds the output colour at the index equal to the input
-          colour. A 1->1 identity map is therefore just a vec with its index as an
-          entry.
-
-          The UNCOLOURED (0) colour always has to be mapped to UNCOLOURED!
-        */
-        make_colour_map(&mut colours, &to_merge);
-        assert!(colours[UNCOLOURED] == UNCOLOURED);
-
-        //(C) Recolour the canvas with the colour map if the map is not empty
-        if num_mergers > 0 {
-          recolour(output.view_mut(), &colours);
-        }
-        #[cfg(feature = "debug")]
-        {
-          perf.merge_ms = merge_start.elapsed().as_millis() as usize;
-        }
-
-        //(ii) We skip counting the number of lakes
-
-        //(iii) Plot current state of the watershed transform
-        #[cfg(feature = "plots")]
-        if let Some(ref path) = self.plot_path {
-          if let Err(err) = plotting::plot_slice(
-            if self.edge_correction {
-              //Do not plot the edge correction padding
-              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
-            } else {
-              output.view()
-            },
-            &path.join(&format!("ws_lvl{water_level}.png")),
-            self.plot_colour_map,
-          ) {
-            println!("Could not make watershed plot. Error: {err}")
-          }
-        }
-
-        //(iv) print performance report
-        #[cfg(all(feature = "debug", feature = "progress"))]
-        {
-          //In this combination we have a progress bar, we should use it to print
-          perf.total_ms = loop_start.elapsed().as_millis() as usize;
-          bar.println(format!("{perf}"));
-        }
-        #[cfg(all(feature = "debug", not(feature = "progress")))]
-        {
-          //We do not have a progress bar, so a plain println! will have to do
-          perf.total_ms = loop_start.elapsed().as_millis() as usize;
-          println!("{perf}");
-        }
-
-        //(v) Update progressbar and plot stuff
-        #[cfg(feature = "progress")]
-        {
-          bar.inc(1);
-        }
-
-        //(vi) Yield a (water_level, image) pair, taking into account the padding
-        //of the input image
-        if self.edge_correction {
-          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
-        } else {
-          (water_level, output.clone())
-        }
-      })
-      .collect()
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)
   }
 }
 
@@ -1678,14 +1599,14 @@ impl Watershed for MergingWatershed {
 /// Due to some implementation details, the 1px-wide edges of the input array are
 /// not accessible to the watershed transform. They will thus remain unfilled for
 /// the entire duration of the transform.
-/// 
+///
 /// A workaround can be enabled by calling `enable_edge_correction` on the
 /// `TransformBuilder`. Enabling this setting copies the input image into a
 /// new array, 1px wider on all sides. This padded array is then used as the
 /// actual input to the watershed transform. The final output of the transform is
 /// a copy of this intermediate array with the padding removed. The padding also
 /// does not show up in the output of intermediate plots.
-pub struct SegmentingWatershed {
+pub struct SegmentingWatershed<T = ()> {
   //Plot options
   #[cfg(feature = "plots")]
   plot_path: Option<std::path::PathBuf>,
@@ -1694,185 +1615,28 @@ pub struct SegmentingWatershed {
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
   max_water_level: u8,
   edge_correction: bool,
+
+  //Hooks
+  wlvl_hook: Option<fn(HookCtx) -> T>,
 }
 
-impl Watershed for SegmentingWatershed {
-  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
-    //(1a) make an image for holding the different water colours
-    let shape = if self.edge_correction {
-      //If the edge correction is enabled, we have to pad the input with a 1px
-      //wide border, which increases the size shape of the output image by two
-      [input.shape()[0] + 2, input.shape()[1] + 2]
-    } else {
-      [input.shape()[0], input.shape()[1]]
-    };
-    let mut output = nd::Array2::<usize>::zeros(shape);
-
-    //(1b) reshape the input image if necessary
-    let mut padded_input =
-      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
-    let input = if self.edge_correction {
-      //Copy the input pixel values into the new padded image
-      nd::Zip::from(
-        padded_input
-          .as_mut()
-          .expect("corrected_input was None, which should be impossible. Please report this bug.")
-          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
-      )
-      .and(input)
-      .into_par_iter()
-      .for_each(|(a, &b)| *a = b);
-      padded_input.as_ref().unwrap().view()
-    } else {
-      input.reborrow()
-    };
-
-    //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len()
-    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
-
-    //Colour the starting pixels
-    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
-      output[idx] = col;
-    }
-    //Set the zeroth colour to UNCOLOURED!
-    colours.insert(UNCOLOURED, UNCOLOURED);
-
-    #[cfg(feature = "debug")]
-    println!("starting with {} lakes", colours.len());
-
-    //(3) set-up progress bar
-    #[cfg(feature = "progress")]
-    let bar = set_up_bar(self.max_water_level);
-
-    //(4) count lakes for all water levels
-    (0..self.max_water_level).into_iter().for_each(|water_level| {
-      //(logging) make a new perfreport
-      #[cfg(feature = "debug")]
-      let mut perf = crate::performance_monitoring::PerfReport::default();
-      #[cfg(feature = "debug")]
-      let loop_start = std::time::Instant::now();
-
-      /*(i) Colour all flooded pixels connected to a source
-        We have to loop multiple times because there may be plateau's. These
-        require us to colour more than just one neighbouring pixel -> we need
-        to loop until there are no more uncoloured, flooded pixels connected to
-        a source left.
-      */
-      'colouring_loop: loop {
-        #[cfg(feature = "progress")]
-        {
-          bar.tick(); //Tick the progressbar
-        }
-        #[cfg(feature = "debug")]
-        {
-          perf.loops += 1;
-        }
-
-        #[cfg(feature = "debug")]
-        let iter_start = std::time::Instant::now();
-
-        /*(A) Find pixels to colour this iteration
-          We first look for all pixels that are uncoloured, flooded and directly
-          attached to a coloured pixel. We do this in parallel. We cannot, however,
-          change the pixel colours *and* look for pixels to colour at the same time.
-          That is why we collect all pixels to colour in a vector, and later update
-          the map.
-        */
-        let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
-
-        #[cfg(feature = "debug")]
-        perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
-
-        /*(B) Colour pixels that we found in step (A)
-          If there are no pixels to be coloured anymore, we can break from this
-          loop and raise the water level
-        */
-        if pix_to_colour.is_empty() {
-          //No more connected, flooded pixels left -> raise water level
-          break 'colouring_loop;
-        } else {
-          /*We have pixels to colour
-            I have to discuss safety for a moment. Since we iterated over all
-            pixels and only allowed a pixel to set its own colour, we know that
-            there is at most one colour instruction per pixel. Since the pixels
-            do not overlap in memory, we can safely access each pixel concurrently.
-            To do this, I temporarily put the output watershed canvas in a global
-            static variable that can be accessed from any thread.
-          */
-          #[cfg(feature = "debug")]
-          let colour_start = std::time::Instant::now();
-
-          pix_to_colour.into_iter().for_each(|(idx, col)| {
-            output[idx] = col;
-          });
-
-          #[cfg(feature = "debug")]
-          perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
-        }
-      }
-
-      /* (ii) ¡DO NOT! Merge all touching regions
-        This is the main difference between the two algo's
-      */
-      #[cfg(feature = "debug")]
-      {
-        perf.merge_ms = 0; //by definition, since we're skipping this step
-      }
-
-      //(ii) DO NOT Count the number and size of lakes
-
-      //(iii) Plot current state of the watershed transform
+impl<T> SegmentingWatershed<T> {
+  fn clone_with_hook<U>(&self, hook: fn(HookCtx) -> U) -> SegmentingWatershed<U> {
+    SegmentingWatershed {
       #[cfg(feature = "plots")]
-      if let Some(ref path) = self.plot_path {
-        if let Err(err) = plotting::plot_slice(
-          if self.edge_correction {
-            //Do not plot the edge correction padding
-            output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
-          } else {
-            output.view()
-          },
-          &path.join(&format!("ws_lvl{water_level}.png")),
-          self.plot_colour_map,
-        ) {
-          println!("Could not make watershed plot. Error: {err}")
-        }
-      }
-
-      //(iv) print performance report
-      #[cfg(all(feature = "debug", feature = "progress"))]
-      {
-        //In this combination we have a progress bar, we should use it to print
-        perf.total_ms = loop_start.elapsed().as_millis() as usize;
-        bar.println(format!("{perf}"));
-      }
-      #[cfg(all(feature = "debug", not(feature = "progress")))]
-      {
-        //We do not have a progress bar, so a plain println! will have to do
-        println!("{perf}");
-      }
-
-      //(v) Update progressbar and plot stuff
-      #[cfg(feature = "progress")]
-      {
-        bar.inc(1);
-      }
-    });
-
-    //Return transform of image, taking into account the edge correction padding
-    if self.edge_correction {
-      output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned()
-    } else {
-      output
+      plot_path: self.plot_path.clone(),
+      #[cfg(feature = "plots")]
+      plot_colour_map: self.plot_colour_map,
+      max_water_level: self.max_water_level,
+      edge_correction: self.edge_correction,
+      wlvl_hook: Some(hook),
     }
   }
+}
 
-  fn transform_to_list(
-    &self,
-    input: nd::ArrayView2<u8>,
-    seeds: &[(usize, usize)],
-  ) -> Vec<(u8, Vec<usize>)> {
-    //(1a) make an image for holding the different water colours
+impl<T> Watershed<T> for SegmentingWatershed<T> {
+  fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T> {
+    //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
       //wide border, which increases the size shape of the output image by two
@@ -1904,6 +1668,8 @@ impl Watershed for SegmentingWatershed {
     //(2) set "colours" for each of the starting points
     // The colours should range from 1 to seeds.len()
     let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
+    let seed_colours: Vec<_> =
+      colours.iter().zip(seeds.iter()).map(|(col, (x, z))| (*col, (*x, *z))).collect();
 
     //Colour the starting pixels
     for (&idx, &col) in seeds.iter().zip(colours.iter()) {
@@ -1919,8 +1685,8 @@ impl Watershed for SegmentingWatershed {
     #[cfg(feature = "progress")]
     let bar = set_up_bar(self.max_water_level);
 
-    //(4) count lakes for all water levels
-    (0..self.max_water_level)
+    //(4) increase water level to specified maximum
+    (0..=self.max_water_level)
       .into_iter()
       .map(|water_level| {
         //(logging) make a new perfreport
@@ -1968,14 +1734,7 @@ impl Watershed for SegmentingWatershed {
             //No more connected, flooded pixels left -> raise water level
             break 'colouring_loop;
           } else {
-            /*We have pixels to colour
-              I have to discuss safety for a moment. Since we iterated over all
-              pixels and only allowed a pixel to set its own colour, we know that
-              there is at most one colour instruction per pixel. Since the pixels
-              do not overlap in memory, we can safely access each pixel concurrently.
-              To do this, I temporarily put the output watershed canvas in a global
-              static variable that can be accessed from any thread.
-            */
+            //We have pixels to colour
             #[cfg(feature = "debug")]
             let colour_start = std::time::Instant::now();
 
@@ -1988,28 +1747,13 @@ impl Watershed for SegmentingWatershed {
           }
         }
 
-        /* (ii) ¡DO NOT! Merge all touching regions
-          This is the main difference between the two algo's
+        /* (ii) Merge all touching regions
+          We do not do this for the segmenting transform!
         */
         #[cfg(feature = "debug")]
         {
-          perf.merge_ms = 0; //by definition, since we're skipping this step
+          perf.merge_ms = 0;
         }
-
-        //(ii) Count the number and size of lakes
-        let lake_sizes: Vec<usize> = {
-          #[cfg(feature = "debug")]
-          let count_start = std::time::Instant::now();
-          let mut lake_sizes = vec![0usize; colours.len() + 1];
-          output.iter().for_each(|&x| {
-            *lake_sizes.get_mut(x).unwrap() += 1;
-          });
-          #[cfg(feature = "debug")]
-          {
-            perf.lake_count_ms = count_start.elapsed().as_millis() as usize;
-          }
-          lake_sizes //<- return
-        };
 
         //(iii) Plot current state of the watershed transform
         #[cfg(feature = "plots")]
@@ -2038,6 +1782,7 @@ impl Watershed for SegmentingWatershed {
         #[cfg(all(feature = "debug", not(feature = "progress")))]
         {
           //We do not have a progress bar, so a plain println! will have to do
+          perf.total_ms = loop_start.elapsed().as_millis() as usize;
           println!("{perf}");
         }
 
@@ -2047,10 +1792,33 @@ impl Watershed for SegmentingWatershed {
           bar.inc(1);
         }
 
-        //(vi) Yield a (colour, lakesizes) pair
-        (water_level, lake_sizes)
+        //(vi) Execute hook (if one is provided)
+        self.wlvl_hook.and_then(|hook| {
+          Some(hook(HookCtx::ctx(
+            water_level,
+            self.max_water_level,
+            input.view(),
+            output.view(),
+            &seed_colours,
+          )))
+        })
       })
+      .filter_map(|x| x)
       .collect()
+  }
+
+  fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform = self.clone_with_hook(|ctx| {
+      if ctx.water_level == ctx.max_water_level {
+        Some(ctx.colours.to_owned())
+      } else {
+        None
+      }
+    });
+
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)[0].as_ref().expect("no output?").clone()
   }
 
   fn transform_history(
@@ -2058,176 +1826,24 @@ impl Watershed for SegmentingWatershed {
     input: nd::ArrayView2<u8>,
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
-    //(1a) make an image for holding the different water colours
-    let shape = if self.edge_correction {
-      //If the edge correction is enabled, we have to pad the input with a 1px
-      //wide border, which increases the size shape of the output image by two
-      [input.shape()[0] + 2, input.shape()[1] + 2]
-    } else {
-      [input.shape()[0], input.shape()[1]]
-    };
-    let mut output = nd::Array2::<usize>::zeros(shape);
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform =
+      self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
 
-    //(1b) reshape the input image if necessary
-    let mut padded_input =
-      if self.edge_correction { Some(nd::Array2::<u8>::zeros(shape)) } else { None };
-    let input = if self.edge_correction {
-      //Copy the input pixel values into the new padded image
-      nd::Zip::from(
-        padded_input
-          .as_mut()
-          .expect("corrected_input was None, which should be impossible. Please report this bug.")
-          .slice_mut(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]),
-      )
-      .and(input)
-      .into_par_iter()
-      .for_each(|(a, &b)| *a = b);
-      padded_input.as_ref().unwrap().view()
-    } else {
-      input.reborrow()
-    };
-
-    //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len()
-    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
-
-    //Colour the starting pixels
-    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
-      output[idx] = col;
-    }
-    //Set the zeroth colour to UNCOLOURED!
-    colours.insert(UNCOLOURED, UNCOLOURED);
-
-    #[cfg(feature = "debug")]
-    println!("starting with {} lakes", colours.len());
-
-    //(3) set-up progress bar
-    #[cfg(feature = "progress")]
-    let bar = set_up_bar(self.max_water_level);
-
-    //(4) count lakes for all water levels
-    (0..self.max_water_level)
-      .into_iter()
-      .map(|water_level| {
-        //(logging) make a new perfreport
-        #[cfg(feature = "debug")]
-        let mut perf = crate::performance_monitoring::PerfReport::default();
-        #[cfg(feature = "debug")]
-        let loop_start = std::time::Instant::now();
-
-        /*(i) Colour all flooded pixels connected to a source
-          We have to loop multiple times because there may be plateau's. These
-          require us to colour more than just one neighbouring pixel -> we need
-          to loop until there are no more uncoloured, flooded pixels connected to
-          a source left.
-        */
-        'colouring_loop: loop {
-          #[cfg(feature = "progress")]
-          {
-            bar.tick(); //Tick the progressbar
-          }
-          #[cfg(feature = "debug")]
-          {
-            perf.loops += 1;
-          }
-
-          #[cfg(feature = "debug")]
-          let iter_start = std::time::Instant::now();
-
-          /*(A) Find pixels to colour this iteration
-            We first look for all pixels that are uncoloured, flooded and directly
-            attached to a coloured pixel. We do this in parallel. We cannot, however,
-            change the pixel colours *and* look for pixels to colour at the same time.
-            That is why we collect all pixels to colour in a vector, and later update
-            the map.
-          */
-          let pix_to_colour = find_flooded_px(input.view(), output.view(), water_level);
-
-          #[cfg(feature = "debug")]
-          perf.big_iter_ms.push(iter_start.elapsed().as_millis() as usize);
-
-          /*(B) Colour pixels that we found in step (A)
-            If there are no pixels to be coloured anymore, we can break from this
-            loop and raise the water level
-          */
-          if pix_to_colour.is_empty() {
-            //No more connected, flooded pixels left -> raise water level
-            break 'colouring_loop;
-          } else {
-            /*We have pixels to colour
-              I have to discuss safety for a moment. Since we iterated over all
-              pixels and only allowed a pixel to set its own colour, we know that
-              there is at most one colour instruction per pixel. Since the pixels
-              do not overlap in memory, we can safely access each pixel concurrently.
-              To do this, I temporarily put the output watershed canvas in a global
-              static variable that can be accessed from any thread.
-            */
-            #[cfg(feature = "debug")]
-            let colour_start = std::time::Instant::now();
-
-            pix_to_colour.into_iter().for_each(|(idx, col)| {
-              output[idx] = col;
-            });
-
-            #[cfg(feature = "debug")]
-            perf.colouring_mus.push(colour_start.elapsed().as_micros() as usize);
-          }
-        }
-
-        /* (ii) ¡DO NOT! Merge all touching regions
-          This is the main difference between the two algo's
-        */
-        #[cfg(feature = "debug")]
-        {
-          perf.merge_ms = 0; //by definition, since we're skipping this step
-        }
-
-        //(ii) DO NOT Count the number and size of lakes
-
-        //(iii) Plot current state of the watershed transform
-        #[cfg(feature = "plots")]
-        if let Some(ref path) = self.plot_path {
-          if let Err(err) = plotting::plot_slice(
-            if self.edge_correction {
-              //Do not plot the edge correction padding
-              output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)])
-            } else {
-              output.view()
-            },
-            &path.join(&format!("ws_lvl{water_level}.png")),
-            self.plot_colour_map,
-          ) {
-            println!("Could not make watershed plot. Error: {err}")
-          }
-        }
-
-        //(iv) print performance report
-        #[cfg(all(feature = "debug", feature = "progress"))]
-        {
-          //In this combination we have a progress bar, we should use it to print
-          perf.total_ms = loop_start.elapsed().as_millis() as usize;
-          bar.println(format!("{perf}"));
-        }
-        #[cfg(all(feature = "debug", not(feature = "progress")))]
-        {
-          //We do not have a progress bar, so a plain println! will have to do
-          println!("{perf}");
-        }
-
-        //(v) Update progressbar and plot stuff
-        #[cfg(feature = "progress")]
-        {
-          bar.inc(1);
-        }
-
-        //(vi) Yield a (water_level, image) pair, taking into account the padding
-        //of the input image
-        if self.edge_correction {
-          (water_level, output.slice(nd::s![1..(shape[0] - 1), 1..(shape[1] - 1)]).to_owned())
-        } else {
-          (water_level, output.clone())
-        }
-      })
-      .collect()
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)
   }
+
+  fn transform_to_list(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<(u8, Vec<usize>)> {
+    //(1) Make a copy of self with the appropriate hook
+    let proper_transform = self.clone_with_hook(find_lake_sizes);
+
+    //(2) Perform transform with new hook
+    proper_transform.transform_with_hook(input, seeds)
+  }
+
 }
