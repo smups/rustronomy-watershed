@@ -2,6 +2,9 @@
 ![](https://github.com/smups/rustronomy/blob/main/logos/Rustronomy-watershed_github_banner_light.png#gh-dark-mode-only)
 # rustronomy-watershed changelog
 
+## v0.4.1
+Updated examples in README
+
 ## v0.4.0
 *This version breaks the currently existing API*
 

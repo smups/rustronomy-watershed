@@ -52,17 +52,18 @@ The random field can be generated with the `ndarray_rand` crate. To configure a
 new watershed transform, one can use the `TransformBuilder` struct which is
 included in the `rustronomy_watershed` prelude.
 ```rust
+use ndarray as nd;
 use rustronomy_watershed::prelude::*;
 use ndarray_rand::{rand_distr::Uniform, RandomExt};
 
 //Create a random uniform distribution
 let rf = nd::Array2::<u8>::random((512, 512), Uniform::new(0, 254));
 //Set-up the watershed transform
-let watershed = TransformBuilder::new_merging().build().unwrap();
+let watershed = TransformBuilder::default().build_segmenting().unwrap();
 //Find minima of the random field (to be used as seeds)
 let rf_mins = watershed.find_local_minima(rf.view());
 //Execute the watershed transform
-let lakes = watershed.transform(rf.view(), &rf_mins)
+let output = watershed.transform(rf.view(), &rf_mins);
 ```
 # Cargo feature gates
 *By default, all features behind cargo feature gates are **disabled***
