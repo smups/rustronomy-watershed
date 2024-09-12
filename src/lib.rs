@@ -871,20 +871,20 @@ impl<'a> HookCtx<'a> {
 /// and `build_merging()` associated functions. These return a struct of the type
 /// `SegmentingWatershed` and `MergingWatershed` respectively, which can be
 /// shared between threads.
-/// 
+///
 /// ## `default()` vs `new()` and custom hooks
 /// tl;dr: Use `new()` if you want to run a custom hook each time a the water
 /// level is raised during the watershed transform. Otherwise, use `default()`.
-/// 
+///
 /// A `TransformBuilder` struct can be obtained with both the `default()` and
 /// `new()` functions implemented for both. The main difference between the two
 /// is the resulting type:
 /// - `default()` results in a `TransformBuilder<()>`
-/// - `new()` results in a `TransformBuilder<T>` 
+/// - `new()` results in a `TransformBuilder<T>`
 /// The default type for `T` is `()`. `T` is only used when specifying a custom
 /// function run by the watershed transform each time the water level is raised.
 /// This "hook" has the type `fn(HookCtx) -> T`.
-/// 
+///
 /// Sadly, Rust is not able to determine that `T` should take the default `()`
 /// type if no hook is configured during the builder phase (which can be done with
 /// the `set_wlvl_hook` function). Therefore, `Default` is only implemented for
@@ -1050,7 +1050,7 @@ impl<T> TransformBuilder<T> {
 /// Errors that may occur during the build process
 pub enum BuildErr {
   MaxToHigh(u8),
-  MaxToLow(u8)
+  MaxToLow(u8),
 }
 
 impl std::error::Error for BuildErr {}
@@ -1301,7 +1301,7 @@ pub struct MergingWatershed<T = ()> {
   #[cfg(feature = "plots")]
   plot_colour_map:
     fn(count: usize, min: usize, max: usize) -> Result<RGBColor, Box<dyn std::error::Error>>,
-  
+
   //Required options
   max_water_level: u8,
   edge_correction: bool,
@@ -1541,8 +1541,7 @@ impl<T> Watershed<T> for MergingWatershed<T> {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let proper_transform =
-      self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
+    let proper_transform = self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
 
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
@@ -1632,10 +1631,17 @@ impl<T> SegmentingWatershed<T> {
       wlvl_hook: Some(hook),
     }
   }
-}
 
-impl<T> Watershed<T> for SegmentingWatershed<T> {
-  fn transform_with_hook(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> Vec<T> {
+  /// Transform the image, with seeds labeled by colours.
+  ///
+  /// This differs from transform_with_hook in that you can specify nonconsecutive colours,
+  /// or multiple seeds with the same colour. Seeds with the color 0 will be treated as uncoloured,
+  /// which is equivalent to providing no seed at all.
+  pub fn transform_with_hook_and_colours(
+    &self,
+    input: nd::ArrayView2<u8>,
+    seeds_with_colours: &[(usize, (usize, usize))],
+  ) -> Vec<T> {
     //(1a) make an image for holding the diffserent water colours
     let shape = if self.edge_correction {
       //If the edge correction is enabled, we have to pad the input with a 1px
@@ -1665,21 +1671,13 @@ impl<T> Watershed<T> for SegmentingWatershed<T> {
       input.reborrow()
     };
 
-    //(2) set "colours" for each of the starting points
-    // The colours should range from 1 to seeds.len()
-    let mut colours: Vec<usize> = (1..=seeds.len()).into_iter().collect();
-    let seed_colours: Vec<_> =
-      colours.iter().zip(seeds.iter()).map(|(col, (x, z))| (*col, (*x, *z))).collect();
-
     //Colour the starting pixels
-    for (&idx, &col) in seeds.iter().zip(colours.iter()) {
-      output[idx] = col;
+    for (col, idx) in seeds_with_colours {
+      output[*idx] = *col;
     }
-    //Set the zeroth colour to UNCOLOURED!
-    colours.insert(UNCOLOURED, UNCOLOURED);
 
     #[cfg(feature = "debug")]
-    println!("starting with {} lakes", colours.len());
+    println!("starting with {} lakes", seeds_with_colours.len());
 
     //(3) set-up progress bar
     #[cfg(feature = "progress")]
@@ -1799,12 +1797,25 @@ impl<T> Watershed<T> for SegmentingWatershed<T> {
             self.max_water_level,
             input.view(),
             output.view(),
-            &seed_colours,
+            &seeds_with_colours,
           )))
         })
       })
       .filter_map(|x| x)
       .collect()
+  }
+}
+
+impl<T> Watershed<T> for SegmentingWatershed<T> {
+  fn transform_with_hook(
+    &self,
+    input: ndarray::ArrayView2<u8>,
+    seeds: &[(usize, usize)],
+  ) -> Vec<T> {
+    self.transform_with_hook_and_colours(
+      input,
+      &seeds.iter().enumerate().map(|(c, s)| (c + 1, *s)).collect::<Vec<_>>(),
+    )
   }
 
   fn transform(&self, input: nd::ArrayView2<u8>, seeds: &[(usize, usize)]) -> nd::Array2<usize> {
@@ -1827,8 +1838,7 @@ impl<T> Watershed<T> for SegmentingWatershed<T> {
     seeds: &[(usize, usize)],
   ) -> Vec<(u8, nd::Array2<usize>)> {
     //(1) Make a copy of self with the appropriate hook
-    let proper_transform =
-      self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
+    let proper_transform = self.clone_with_hook(|ctx| (ctx.water_level, ctx.colours.to_owned()));
 
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
@@ -1845,5 +1855,4 @@ impl<T> Watershed<T> for SegmentingWatershed<T> {
     //(2) Perform transform with new hook
     proper_transform.transform_with_hook(input, seeds)
   }
-
 }
