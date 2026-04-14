@@ -60,11 +60,11 @@ num-traits = "0.2"
 rayon = "1"
 
 #Random numbers
-rand = "0.8"
+rand = "0.9"
 
 [dev-dependencies]
 ndarray-rand = "0.14"
-rand = "0.8"
+rand = "0.9"
 rustronomy-fits = "0.2"
 
 [package.metadata.cargo-all-features]
